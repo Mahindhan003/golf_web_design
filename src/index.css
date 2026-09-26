@@ -1,0 +1,201 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  /* Pine Forest Green Palette */
+  --color-pine-950: #030e08;
+  --color-pine-900: #0a1c12;
+  --color-pine-800: #1a3a2a;
+  --color-pine-750: #1e4530;
+  --color-pine-700: #1f4e36;
+  --color-pine-600: #265f40;
+  --color-pine-500: #2f7049;
+  --color-pine-400: #4a9264;
+  --color-pine-300: #6aaf85;
+  --color-pine-200: #9ccfb2;
+  --color-pine-100: #c8e8d8;
+  --color-pine-50: #edf8f2;
+
+  /* Fairway (sage greens) */
+  --color-fairway-600: #567a5c;
+  --color-fairway-500: #6b8f72;
+  --color-fairway-300: #9ab89f;
+  --color-fairway-200: #c1d9c6;
+  --color-fairway-100: #e0eee4;
+  --color-fairway-50: #f2f9f4;
+
+  /* Gold Accent */
+  --color-gold-700: #8a6018;
+  --color-gold-600: #a87720;
+  --color-gold-500: #c9a227;
+  --color-gold-400: #d4b347;
+  --color-gold-300: #dfcc6e;
+  --color-gold-100: #fef3d7;
+  --color-gold-50: #fffbeb;
+
+  /* Lime accent (modern highlight) */
+  --color-lime-300: #dcf58a;
+  --color-lime-400: #c8ec5a;
+  --color-lime-500: #a9d334;
+
+  /* Surfaces */
+  --color-canvas: #f3f5f2;
+  --color-ink: #0c1a12;
+
+  /* Elevation */
+  --shadow-card: 0 1px 2px rgba(12, 26, 18, 0.04), 0 10px 28px -12px rgba(12, 26, 18, 0.16);
+  --shadow-float: 0 12px 32px -8px rgba(12, 26, 18, 0.35);
+
+  /* Status Colors */
+  --color-status-open: #16a34a;
+  --color-status-upcoming: #2563eb;
+  --color-status-closed: #dc2626;
+  --color-status-completed: #6b7280;
+  --color-status-cancelled: #9f1239;
+  --color-status-registered: #7c3aed;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+html, body, #root {
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+/* Page transition for route changes */
+@keyframes pageIn {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.page-in { animation: pageIn 0.28s ease-out backwards; }
+
+/* Popover drop-in */
+@keyframes popIn {
+  from { transform: translateY(-6px) scale(0.98); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+.pop-in { animation: popIn 0.16s ease-out backwards; transform-origin: top right; }
+
+/* Visible keyboard focus for mouse/keyboard users on web */
+button:focus-visible, a:focus-visible, [role="button"]:focus-visible {
+  outline: 2px solid var(--color-lime-500);
+  outline-offset: 2px;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Keyframe animations ── */
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-24%); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes toastIn {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* ── Animation classes ── */
+/* `backwards` (not `both`) so no transform lingers after the slide finishes */
+.screen-push { animation: slideInRight 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards; }
+.screen-pop  { animation: slideInLeft  0.22s ease-out backwards; }
+.sheet-up    { animation: slideUp 0.34s cubic-bezier(0.32, 0.72, 0, 1) both; }
+.fade-in-up  { animation: fadeInUp 0.3s ease-out both; }
+.fade-in     { animation: fadeIn 0.2s ease-out both; }
+.spin        { animation: spin 0.8s linear infinite; }
+.toast-in    { animation: toastIn 0.25s ease-out both; }
+
+/* ── Skeleton shimmer ── */
+.skeleton {
+  background: linear-gradient(90deg, #e8ece8 0px, #f4f6f3 80px, #e8ece8 160px);
+  background-size: 400px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ── Image scrims & glass (plain rgba so they survive Figma import) ── */
+.scrim-bottom {
+  background: linear-gradient(to top, rgba(8, 20, 13, 0.88) 0%, rgba(8, 20, 13, 0.35) 45%, rgba(8, 20, 13, 0) 75%);
+}
+.scrim-top {
+  background: linear-gradient(to bottom, rgba(8, 20, 13, 0.45) 0%, rgba(8, 20, 13, 0) 35%);
+}
+.glass-dark {
+  background: rgba(12, 26, 18, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.glass-light {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Hide alt text + broken-image icon if a remote photo fails; the container's background shows instead */
+img {
+  color: transparent;
+}
+
+/* ── Input focus ── */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+}
+
+/* ── Smooth scroll ── */
+.smooth-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
