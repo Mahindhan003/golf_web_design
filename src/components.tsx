@@ -238,6 +238,8 @@ interface ButtonProps {
   fullWidth?: boolean
   className?: string
   type?: 'button' | 'submit'
+  /** Submit a form elsewhere on the page by its id */
+  form?: string
 }
 
 export function Button({
@@ -250,6 +252,7 @@ export function Button({
   fullWidth,
   className = '',
   type = 'button',
+  form,
 }: ButtonProps) {
   const base =
     'inline-flex items-center justify-center gap-2 font-display font-semibold rounded-full tracking-tight transition-all duration-150 select-none active:scale-[0.97]'
@@ -274,6 +277,7 @@ export function Button({
   return (
     <button
       type={type}
+      form={form}
       onClick={onClick}
       disabled={disabled || loading}
       className={`${base} ${sizes[size]} ${variants[variant]} ${fullWidth ? 'w-full' : ''} ${className}`}
@@ -398,7 +402,7 @@ interface SelectFieldProps {
   label: string
   value: string
   onChange: (v: string) => void
-  options: string[]
+  options: (string | { value: string; label: string })[]
   placeholder?: string
   error?: string
   onCanvas?: boolean
@@ -420,7 +424,10 @@ export function SelectField({ label, value, onChange, options, placeholder, erro
         }}
       >
         {placeholder && <option value="" disabled>{placeholder}</option>}
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
+        {options.map(o => {
+          const opt = typeof o === 'string' ? { value: o, label: o } : o
+          return <option key={opt.value} value={opt.value}>{opt.label}</option>
+        })}
       </select>
       {error && <FieldError message={error} />}
     </div>

@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import './store' // load any saved admin edits before the first render
 import { AppProvider, useApp } from './app-context'
 import { useRoute, navigate, type Route } from './router'
 import { AppLayout, Toast, Dialog } from './shell'
@@ -12,29 +13,60 @@ import TournamentDetails from './screens/TournamentDetails'
 import CourseDetails from './screens/CourseDetails'
 import Profile from './screens/Profile'
 import EditProfile from './screens/EditProfile'
+import { AdminLogin, AdminLayout } from './admin/AdminShell'
+import AdminDashboard from './admin/Dashboard'
+import { AdminTournaments, AdminTournamentEditor } from './admin/ManageTournaments'
+import { AdminCourses, AdminCourseEditor } from './admin/ManageCourses'
 
-const AUTH_ROUTES: Route['name'][] = ['signin', 'signup', 'setup']
+const AUTH_ROUTES: Route['name'][] = ['signin', 'signup', 'setup', 'admin-login']
+const isAdminRoute = (r: Route) => r.name.startsWith('admin') && r.name !== 'admin-login'
+
+function NotFound({ home }: { home: string }) {
+  return (
+    <div className="bg-white rounded-[32px] shadow-card">
+      <EmptyState title="Page not found" subtitle="The page you're looking for doesn't exist."
+        action={{ label: 'Go home', onClick: () => navigate(home) }} />
+    </div>
+  )
+}
 
 function Routes() {
   const { route } = useRoute()
-  const { isAuthenticated } = useApp()
+  const { role } = useApp()
   const isAuthRoute = AUTH_ROUTES.includes(route.name)
 
-  // Guard: signed-out users only see auth pages; signed-in users skip them
+  // Guards: signed-out users only see sign-in pages; each role stays in its own area
   useEffect(() => {
-    if (!isAuthenticated && !isAuthRoute) navigate('/signin', { replace: true })
-    if (isAuthenticated && isAuthRoute) navigate('/home', { replace: true })
-  }, [isAuthenticated, isAuthRoute])
+    if (!role && !isAuthRoute) navigate(isAdminRoute(route) ? '/admin/login' : '/signin', { replace: true })
+    else if (role === 'golfer' && (isAuthRoute || isAdminRoute(route))) navigate('/home', { replace: true })
+    else if (role === 'admin' && (isAuthRoute || !isAdminRoute(route))) navigate('/admin', { replace: true })
+  }, [role, isAuthRoute, route])
 
-  if (!isAuthenticated) {
+  if (!role) {
     if (route.name === 'signup') return <SignUp />
     if (route.name === 'setup') return <ProfileSetup />
+    if (route.name === 'admin-login' || isAdminRoute(route)) return <AdminLogin />
     return <SignIn />
   }
-  if (isAuthRoute) return null
 
-  // Key on the full route so each page mounts fresh (loading states, scroll, animation)
   const key = JSON.stringify(route)
+
+  if (role === 'admin') {
+    if (!isAdminRoute(route)) return null
+    const page = (() => {
+      switch (route.name) {
+        case 'admin':                 return <AdminDashboard key={key} />
+        case 'admin-tournaments':     return <AdminTournaments key={key} />
+        case 'admin-tournament-edit': return <AdminTournamentEditor key={key} id={route.id} />
+        case 'admin-courses':         return <AdminCourses key={key} />
+        case 'admin-course-edit':     return <AdminCourseEditor key={key} id={route.id} />
+        default:                      return <NotFound home="/admin" />
+      }
+    })()
+    return <AdminLayout route={route}>{page}</AdminLayout>
+  }
+
+  if (isAuthRoute || isAdminRoute(route)) return null
   const page = (() => {
     switch (route.name) {
       case 'home':         return <Home key={key} />
@@ -43,13 +75,7 @@ function Routes() {
       case 'course':       return <CourseDetails key={key} id={route.id} />
       case 'profile':      return <Profile key={key} />
       case 'edit-profile': return <EditProfile key={key} />
-      default:
-        return (
-          <div className="bg-white rounded-[32px] shadow-card">
-            <EmptyState title="Page not found" subtitle="The page you're looking for doesn't exist."
-              action={{ label: 'Go home', onClick: () => navigate('/home') }} />
-          </div>
-        )
+      default:             return <NotFound home="/home" />
     }
   })()
 

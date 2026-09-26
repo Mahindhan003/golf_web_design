@@ -15,11 +15,26 @@ export type Route =
   | { name: 'course'; id: string }
   | { name: 'profile' }
   | { name: 'edit-profile' }
+  | { name: 'admin-login' }
+  | { name: 'admin' }
+  | { name: 'admin-tournaments' }
+  | { name: 'admin-tournament-edit'; id: string | null }
+  | { name: 'admin-courses' }
+  | { name: 'admin-course-edit'; id: string | null }
   | { name: 'not-found' }
 
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean)
   const [a, b, c] = parts
+  if (a === 'admin') {
+    if (!b) return { name: 'admin' }
+    if (b === 'login') return { name: 'admin-login' }
+    if (b === 'tournaments' && !c) return { name: 'admin-tournaments' }
+    if (b === 'tournaments' && c) return { name: 'admin-tournament-edit', id: c === 'new' ? null : c }
+    if (b === 'courses' && !c) return { name: 'admin-courses' }
+    if (b === 'courses' && c) return { name: 'admin-course-edit', id: c === 'new' ? null : c }
+    return { name: 'not-found' }
+  }
   if (!a || a === 'home') return { name: 'home' }
   if (a === 'signin') return { name: 'signin' }
   if (a === 'signup') return { name: 'signup' }

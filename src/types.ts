@@ -46,6 +46,7 @@ export interface Tournament {
   name: string
   dateRange: string
   startDate: string
+  endDate?: string
   time: string
   venue: string
   location: string

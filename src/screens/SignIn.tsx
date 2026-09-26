@@ -2,13 +2,14 @@ import { useState, type FormEvent } from 'react'
 import { Button, Input, PasswordInput } from '../components'
 import { AuthLayout } from '../shell'
 import { useApp } from '../app-context'
+import { isAdminLogin } from '../store'
 
 type SignInState = 'idle' | 'loading' | 'error' | 'server-error'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function SignIn() {
-  const { signIn, showToast } = useApp()
+  const { signIn, signInAdmin, showToast } = useApp()
   const [email, setEmail]           = useState('')
   const [password, setPassword]     = useState('')
   const [emailError, setEmailError] = useState('')
@@ -32,7 +33,9 @@ export default function SignIn() {
       if (password === 'serverdown') return setState('server-error')
       if (password === 'wrongpass') return setState('error')
       setState('idle')
-      signIn()
+      // The hard-coded admin account can also sign in here
+      if (isAdminLogin(email, password)) signInAdmin()
+      else signIn()
     }, 1400)
   }
 
@@ -104,6 +107,11 @@ export default function SignIn() {
         <a href="#/signup" className="text-ink font-semibold font-display underline underline-offset-4 decoration-lime-500 decoration-2 hover:opacity-70">
           Sign up
         </a>
+      </p>
+
+      <p className="text-center text-[13px] text-gray-500 mt-3">
+        Organiser?{' '}
+        <a href="#/admin/login" className="text-ink font-semibold font-display hover:underline underline-offset-4">Admin sign in</a>
       </p>
 
       <p className="text-center text-[11px] leading-relaxed text-gray-400 mt-10">

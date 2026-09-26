@@ -9,8 +9,11 @@ export interface AccountBasics {
   phone: string
 }
 
+export type Role = 'golfer' | 'admin'
+
 interface AppState {
   isAuthenticated: boolean
+  role: Role | null
   basics: AccountBasics | null
   toast: ToastData | null
   dialog: DialogData | null
@@ -21,6 +24,7 @@ interface AppState {
   showDialog: (d: DialogData) => void
   closeDialog: () => void
   signIn: () => void
+  signInAdmin: () => void
   signOut: () => void
   startSetup: (b: AccountBasics) => void
   completeSetup: (a: NewAccount) => void
@@ -30,7 +34,8 @@ interface AppState {
 const AppContext = createContext<AppState | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setAuth]  = useState(false)
+  const [role, setRole]             = useState<Role | null>(null)
+  const isAuthenticated             = role !== null
   const [basics, setBasics]         = useState<AccountBasics | null>(null)
   const [toast, setToast]           = useState<ToastData | null>(null)
   const [dialog, setDialog]         = useState<DialogData | null>(null)
@@ -45,9 +50,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const touchProfile = useCallback(() => setPV(v => v + 1), [])
 
   const signIn = useCallback(() => {
-    setAuth(true)
+    setRole('golfer')
     navigate('/home', { replace: true })
     showToast(`Welcome back, ${MOCK_PROFILE.firstName}`)
+  }, [showToast])
+
+  const signInAdmin = useCallback(() => {
+    setRole('admin')
+    navigate('/admin', { replace: true })
+    showToast('Signed in to the admin console')
   }, [showToast])
 
   const signOut = useCallback(() => {
@@ -58,12 +69,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       cancelLabel: 'Stay',
       destructive: true,
       onConfirm: () => {
-        setAuth(false)
-        navigate('/signin', { replace: true })
+        setRole(null)
+        navigate(role === 'admin' ? '/admin/login' : '/signin', { replace: true })
         showToast('Signed out successfully', 'info')
       },
     })
-  }, [showToast])
+  }, [showToast, role])
 
   const startSetup = useCallback((b: AccountBasics) => {
     setBasics(b)
@@ -73,19 +84,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const completeSetup = useCallback((a: NewAccount) => {
     applyNewAccount(a)
     setBasics(null)
-    setAuth(true)
+    setRole('golfer')
     setPV(v => v + 1)
     navigate('/home', { replace: true })
     showToast(`Welcome to the clubhouse, ${MOCK_PROFILE.firstName}!`)
   }, [showToast])
 
   const value = useMemo<AppState>(() => ({
-    isAuthenticated, basics, toast, dialog, profileVersion,
+    isAuthenticated, role, basics, toast, dialog, profileVersion,
     showToast, dismissToast, showDialog, closeDialog,
-    signIn, signOut, startSetup, completeSetup, touchProfile,
-  }), [isAuthenticated, basics, toast, dialog, profileVersion,
+    signIn, signInAdmin, signOut, startSetup, completeSetup, touchProfile,
+  }), [isAuthenticated, role, basics, toast, dialog, profileVersion,
        showToast, dismissToast, showDialog, closeDialog,
-       signIn, signOut, startSetup, completeSetup, touchProfile])
+       signIn, signInAdmin, signOut, startSetup, completeSetup, touchProfile])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
