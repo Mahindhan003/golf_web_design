@@ -2,9 +2,9 @@ import { useState, type FormEvent } from 'react'
 import { Button, Input, PasswordInput } from '../components'
 import { AuthLayout } from '../shell'
 import { useApp } from '../app-context'
-import { authenticate } from '../admin/access'
+import { authenticate, authFailureMessage } from '../admin/access'
 
-type SignInState = 'idle' | 'loading' | 'error' | 'server-error'
+type SignInState = 'idle' | 'loading' | 'error' | 'server-error' | 'account'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -15,6 +15,7 @@ export default function SignIn() {
   const [emailError, setEmailError] = useState('')
   const [pwError, setPwError]       = useState('')
   const [state, setState]           = useState<SignInState>('idle')
+  const [accountMsg, setAccountMsg] = useState('')
 
   const validateEmail = (v: string) => (!v ? 'Email is required' : !EMAIL_RE.test(v) ? 'Enter a valid email address' : '')
   const validatePw    = (v: string) => (!v ? 'Password is required' : v.length < 4 ? 'Password must be at least 4 characters' : '')
@@ -33,10 +34,15 @@ export default function SignIn() {
       if (password === 'serverdown') return setState('server-error')
       if (password === 'wrongpass') return setState('error')
       setState('idle')
-      // Admin console logins can also sign in here
+      // Admin console and organiser logins can also sign in here
       const admin = authenticate(email, password)
-      if (admin.ok) signInAdmin(admin.user.id)
-      else signIn()
+      if (admin.ok) return signInAdmin(admin.user.id)
+      if (admin.reason !== 'invalid') {
+        // A real admin/organiser account that can't get in — explain why instead of treating them as a golfer
+        setAccountMsg(authFailureMessage(admin))
+        return setState('account')
+      }
+      signIn()
     }, 1400)
   }
 
@@ -48,6 +54,12 @@ export default function SignIn() {
       <h2 className="font-display font-extrabold text-ink text-[32px] tracking-tight">Welcome back</h2>
       <p className="text-gray-500 text-[15px] mt-1">Sign in to your account to continue</p>
 
+      {state === 'account' && (
+        <div className="mt-6 flex items-start gap-3 bg-amber-50 rounded-2xl px-4 py-3.5 fade-in" role="alert">
+          <span className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 flex-shrink-0" />
+          <p className="text-sm font-semibold text-amber-800 font-display">{accountMsg}</p>
+        </div>
+      )}
       {(state === 'error' || state === 'server-error') && (
         <div className="mt-6 flex items-start gap-3 bg-rose-50 rounded-2xl px-4 py-3.5 fade-in" role="alert">
           <svg width="18" height="18" viewBox="0 0 18 18" className="flex-shrink-0 mt-0.5" fill="none">

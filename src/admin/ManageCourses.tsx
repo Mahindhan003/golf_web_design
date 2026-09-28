@@ -9,6 +9,7 @@ import { navigate } from '../router'
 import { CourseForm } from './forms'
 import { IconPlus, IconPencil, IconTrash, NoAccess, Can } from './AdminShell'
 import { BackLink } from '../screens/TournamentDetails'
+import { canChangeCourse, organizerName } from './access'
 
 export function useConfirmDeleteCourse() {
   const { showDialog, showToast } = useApp()
@@ -42,7 +43,7 @@ export function useConfirmDeleteCourse() {
 
 export function AdminCourses() {
   useDataVersion()
-  const { can } = useApp()
+  const { can, adminUser, adminOrg } = useApp()
   const confirmDelete = useConfirmDeleteCourse()
   const [search, setSearch] = useState('')
   const q = search.trim().toLowerCase()
@@ -51,11 +52,14 @@ export function AdminCourses() {
   return (
     <div className="page-in">
       <PageHeader
-        eyebrow="Admin console"
+        eyebrow={adminOrg?.name ?? 'Admin console'}
         title="Courses"
         actions={<Can perm="courses.create"><Button onClick={() => navigate('/admin/courses/new')}><IconPlus /> New course</Button></Can>}
       />
 
+      {adminOrg && (
+        <p className="text-gray-500 -mt-4 mb-6 max-w-2xl">All courses on the platform are listed so you can hold events at them. You can edit the courses your organisation added.</p>
+      )}
       <div className="max-w-[440px] mb-5"><SearchInput value={search} onChange={setSearch} placeholder="Search courses…" /></div>
 
       {rows.length === 0 ? (
@@ -80,6 +84,9 @@ export function AdminCourses() {
                 </a>
                 <div className="px-3 pt-3.5 pb-2 flex-1 flex flex-col">
                   <h3 className="font-display font-bold text-ink text-[16px] tracking-tight">{c.name}</h3>
+                  <p className="text-[11px] font-semibold font-display text-pine-600 mt-0.5">
+                    {c.organizerId ? (c.organizerId === adminUser?.organizationId ? 'Added by your organisation' : `Added by ${organizerName(c.organizerId) ?? 'an organiser'}`) : 'Platform course'}
+                  </p>
                   <p className="text-[12px] text-gray-500 mt-0.5">{c.city}, {c.region}</p>
                   <div className="grid grid-cols-4 gap-1.5 mt-3">
                     {[[c.holes, 'Holes'], [c.par, 'Par'], [c.yardage.toLocaleString(), 'Yds'], [c.slope, 'Slope']].map(([v, l]) => (
@@ -91,9 +98,9 @@ export function AdminCourses() {
                   </div>
                   <div className="flex gap-2 mt-4">
                     <a href={`#/admin/courses/${c.id}`} className="flex-1 h-10 rounded-full bg-ink text-white text-[13px] font-bold font-display flex items-center justify-center gap-2 hover:bg-pine-900">
-                      {can('courses.edit') ? <><IconPencil /> Edit</> : 'View'}
+                      {can('courses.edit') && canChangeCourse(adminUser, c) ? <><IconPencil /> Edit</> : 'View'}
                     </a>
-                    {can('courses.delete') && <button onClick={() => confirmDelete(c)} aria-label={`Delete ${c.name}`} title="Delete"
+                    {can('courses.delete') && canChangeCourse(adminUser, c) && <button onClick={() => confirmDelete(c)} aria-label={`Delete ${c.name}`} title="Delete"
                       className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-100"><IconTrash /></button>}
                   </div>
                 </div>
@@ -110,7 +117,7 @@ export function AdminCourses() {
 
 export function AdminCourseEditor({ id }: { id: string | null }) {
   useDataVersion()
-  const { showToast, can } = useApp()
+  const { showToast, can, adminUser } = useApp()
   const confirmDelete = useConfirmDeleteCourse()
   const existing = id ? MOCK_COURSES.find(c => c.id === id) : undefined
 
@@ -127,7 +134,8 @@ export function AdminCourseEditor({ id }: { id: string | null }) {
   const done = () => navigate('/admin/courses')
   if (isNew && !can('courses.create')) return <NoAccess what="create courses" />
   if (!can('courses.view')) return <NoAccess what="view courses" />
-  const readOnly = !isNew && !can('courses.edit')
+  // Organisers can open any course but only change their own
+  const readOnly = !isNew && (!can('courses.edit') || !canChangeCourse(adminUser, existing!))
 
   return (
     <div className="page-in max-w-[920px]">
@@ -135,7 +143,7 @@ export function AdminCourseEditor({ id }: { id: string | null }) {
       <PageHeader
         eyebrow={isNew ? 'Create' : readOnly ? 'View only' : 'Edit'}
         title={isNew ? 'New course' : existing.name}
-        actions={!isNew && can('courses.delete') && (
+        actions={!isNew && can('courses.delete') && canChangeCourse(adminUser, existing!) && (
           <button onClick={() => confirmDelete(existing, done)}
             className="h-11 px-4 rounded-full bg-rose-50 text-rose-600 text-[14px] font-bold font-display flex items-center gap-2 hover:bg-rose-100">
             <IconTrash /> Delete
@@ -150,14 +158,14 @@ export function AdminCourseEditor({ id }: { id: string | null }) {
         readOnly={readOnly}
         scorecardLocked={!can('courses.scorecard')}
         onSave={c => {
-          upsertCourse(c)
+          upsertCourse(isNew ? { ...c, organizerId: adminUser?.organizationId } : c)
           showToast(isNew ? `"${c.name}" added` : 'Course saved')
           done()
         }}
       />
 
       {readOnly ? (
-        <p className="mt-6 text-[13px] text-gray-500">Your role can view this course but not change it.</p>
+        <p className="mt-6 text-[13px] text-gray-500">{can('courses.edit') ? 'This course was added by another organiser or the platform, so you can view it but not change it.' : 'Your role can view this course but not change it.'}</p>
       ) : (
       <div className="sticky bottom-4 mt-8 z-10">
         <div className="bg-ink rounded-full shadow-float p-2 pl-6 flex items-center gap-3">

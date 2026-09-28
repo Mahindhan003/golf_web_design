@@ -1,6 +1,7 @@
 import type { HoleData } from '../types'
 import { TournamentCard, InfoRow, EmptyState, IconPin } from '../components'
 import { getCourse, getTournamentsByCourse } from '../data'
+import { isPublicTournament } from '../admin/access'
 import { navigate } from '../router'
 import { useFakeLoad } from '../shell'
 import { BackLink } from './TournamentDetails'
@@ -46,7 +47,7 @@ function NineTable({ label, holes, totalLabel }: { label: string; holes: HoleDat
 export default function CourseDetails({ id }: { id: string }) {
   const loading = useFakeLoad(600)
   const course = getCourse(id)
-  const tournaments = getTournamentsByCourse(id)
+  const tournaments = getTournamentsByCourse(id).filter(isPublicTournament)
 
   const goBack = () => (window.history.length > 1 ? window.history.back() : navigate('/tournaments'))
 

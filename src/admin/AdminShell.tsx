@@ -4,7 +4,7 @@ import { useApp } from '../app-context'
 import { AuthLayout, Wordmark } from '../shell'
 import { Button, Input, PasswordInput, IconSignOut } from '../components'
 import { resetDemoData } from '../store'
-import { authenticate } from './access'
+import { authenticate, authFailureMessage, resetAccessData, type OrgStatus } from './access'
 import { navigate } from '../router'
 
 /* ───────── Icons (currentColor so the nav can tint them) ───────── */
@@ -118,9 +118,7 @@ export function AdminLogin() {
       setLoading(false)
       const r = authenticate(email, password)
       if (r.ok) signInAdmin(r.user.id)
-      else setError(r.reason === 'inactive'
-        ? 'This admin account has been deactivated. Contact a Super Admin.'
-        : 'Invalid admin credentials')
+      else setError(r.reason === 'invalid' ? 'Invalid admin credentials' : authFailureMessage(r))
     }, 900)
   }
 
@@ -133,7 +131,7 @@ export function AdminLogin() {
         <span className="w-1.5 h-1.5 rounded-full bg-lime-400" /> Admin console
       </span>
       <h2 className="font-display font-extrabold text-ink text-[32px] tracking-tight mt-4">Admin sign in</h2>
-      <p className="text-gray-500 text-[15px] mt-1">For tournament organisers and staff</p>
+      <p className="text-gray-500 text-[15px] mt-1">For platform staff, organisers and their teams</p>
 
       {error && (
         <div role="alert" className="mt-6 flex items-center gap-3 bg-rose-50 rounded-2xl px-4 py-3.5 fade-in">
@@ -156,10 +154,14 @@ export function AdminLogin() {
       </form>
 
       <p className="text-center text-sm text-gray-500 mt-7">
-        Not an organiser?{' '}
-        <a href="#/signin" className="text-ink font-semibold font-display underline underline-offset-4 decoration-lime-500 decoration-2 hover:opacity-70">
-          Golfer sign in
+        New organiser?{' '}
+        <a href="#/signup" className="text-ink font-semibold font-display underline underline-offset-4 decoration-lime-500 decoration-2 hover:opacity-70">
+          Register your organisation
         </a>
+      </p>
+      <p className="text-center text-sm text-gray-500 mt-2">
+        Playing, not organising?{' '}
+        <a href="#/signin" className="text-ink font-semibold font-display hover:underline underline-offset-4">Golfer sign in</a>
       </p>
     </AuthLayout>
   )
@@ -171,6 +173,8 @@ const NAV = [
   { label: 'Dashboard',   href: '#/admin',             Icon: IconDashboard, match: ['admin'] },
   { label: 'Tournaments', href: '#/admin/tournaments', Icon: IconTrophy,    match: ['admin-tournaments', 'admin-tournament-edit'] },
   { label: 'Courses',     href: '#/admin/courses',     Icon: IconFlag,      match: ['admin-courses', 'admin-course-edit'] },
+  { label: 'Organisation', href: '#/admin/organisation', Icon: IconBuilding, match: ['admin-organisation'] },
+  { label: 'Organizers',  href: '#/admin/organizers',  Icon: IconBuilding,  match: ['admin-organizers'] },
   { label: 'Roles & permissions', href: '#/admin/roles', Icon: IconShield,   match: ['admin-roles', 'admin-role-edit'] },
   { label: 'Admin users', href: '#/admin/users',       Icon: IconUsersNav,  match: ['admin-users'] },
 ]
@@ -180,25 +184,60 @@ const NAV_PERM: Record<string, string> = {
   Dashboard: 'dashboard.view',
   Tournaments: 'tournaments.view',
   Courses: 'courses.view',
+  Organisation: 'organisation.view',
+  Organizers: 'organizers.view',
   'Roles & permissions': 'roles.view',
   'Admin users': 'users.view',
+}
+
+export const ORG_STATUS_STYLE: Record<OrgStatus, { label: string; chip: string; dot: string }> = {
+  pending:   { label: 'Pending review', chip: 'bg-amber-50 text-amber-700',     dot: 'bg-amber-500' },
+  approved:  { label: 'Approved',       chip: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
+  rejected:  { label: 'Rejected',       chip: 'bg-rose-50 text-rose-700',       dot: 'bg-rose-500' },
+  suspended: { label: 'Suspended',      chip: 'bg-gray-100 text-gray-600',      dot: 'bg-gray-400' },
+}
+
+export function IconBuilding() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M4 21V5a2 2 0 012-2h7a2 2 0 012 2v16M15 9h3a2 2 0 012 2v10M3 21h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M8 7h3M8 11h3M8 15h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+    </svg>
+  )
 }
 
 function useResetDemo() {
   const { showDialog, showToast } = useApp()
   return () => showDialog({
     title: 'Reset demo data?',
-    message: 'This restores the original tournaments and courses and removes every change made in the admin console on this device.',
+    message: 'This restores the original tournaments, courses, organisers, roles and admin users, and removes every change made in the admin console on this device.',
     confirmLabel: 'Reset data',
     destructive: true,
-    onConfirm: () => { resetDemoData(); showToast('Demo data restored', 'info') },
+    onConfirm: () => { resetDemoData(); resetAccessData(); showToast('Demo data restored', 'info') },
   })
 }
 
+/** Shown across the console while an organiser's application is under review */
+function OrgStatusBanner() {
+  const { adminOrg } = useApp()
+  if (!adminOrg || adminOrg.status === 'approved') return null
+  return (
+    <div className="mb-6 flex items-start gap-3 bg-amber-50 text-amber-800 rounded-2xl px-5 py-4 page-in">
+      <span className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0" />
+      <div className="text-[14px] leading-relaxed">
+        <p className="font-bold font-display">{adminOrg.name} is under review</p>
+        <p>You can set up your profile, invite your team and create <span className="font-semibold">draft</span> tournaments. Publishing unlocks once the platform team approves your organisation — usually within 1–2 working days.</p>
+      </div>
+    </div>
+  )
+}
+
 export function AdminLayout({ route, children }: { route: Route; children: ReactNode }) {
-  const { signOut, can, adminUser, adminRole } = useApp()
+  const { signOut, can, adminUser, adminRole, adminOrg } = useApp()
   const reset = useResetDemo()
-  const nav = NAV.filter(n => can(NAV_PERM[n.label]))
+  // Organisation profile only makes sense for organisation members; Organizers only for platform staff
+  const nav = NAV.filter(n => can(NAV_PERM[n.label]) &&
+    !(n.label === 'Organisation' && !adminOrg) && !(n.label === 'Organizers' && adminOrg))
   const initials = (adminUser?.name ?? 'A').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()
 
   return (
@@ -206,11 +245,22 @@ export function AdminLayout({ route, children }: { route: Route; children: React
       {/* Sidebar */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[264px] flex-col bg-ink p-5 z-30">
         <div className="px-2 pt-1"><Wordmark dark /></div>
-        <span className="mx-2 mt-4 self-start inline-flex items-center gap-2 h-7 px-3 rounded-full bg-lime-400/15 text-lime-400 text-[11px] font-bold font-display tracking-wide uppercase">
-          <span className="w-1.5 h-1.5 rounded-full bg-lime-400" /> Admin console
-        </span>
+        {adminOrg ? (
+          <div className="mx-1 mt-5 rounded-2xl bg-white/[0.06] px-3.5 py-3">
+            <p className="text-white/45 text-[10px] font-bold font-display uppercase tracking-wider">Organiser console</p>
+            <p className="text-white text-[14px] font-bold font-display tracking-tight truncate mt-0.5">{adminOrg.name}</p>
+            <span className={`mt-2 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-bold font-display ${ORG_STATUS_STYLE[adminOrg.status].chip}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${ORG_STATUS_STYLE[adminOrg.status].dot}`} />
+              {ORG_STATUS_STYLE[adminOrg.status].label}
+            </span>
+          </div>
+        ) : (
+          <span className="mx-2 mt-4 self-start inline-flex items-center gap-2 h-7 px-3 rounded-full bg-lime-400/15 text-lime-400 text-[11px] font-bold font-display tracking-wide uppercase">
+            <span className="w-1.5 h-1.5 rounded-full bg-lime-400" /> Admin console
+          </span>
+        )}
 
-        <nav className="mt-8 flex flex-col gap-1.5" aria-label="Admin">
+        <nav className="mt-6 flex flex-col gap-1.5" aria-label="Admin">
           {nav.map(({ label, href, Icon, match }) => {
             const active = match.includes(route.name)
             return (
@@ -218,7 +268,7 @@ export function AdminLayout({ route, children }: { route: Route; children: React
                 className={`h-12 px-4 rounded-full flex items-center gap-3 font-display font-bold text-[14px] tracking-tight transition-colors ${
                   active ? 'bg-lime-400 text-ink' : 'text-white/60 hover:text-white hover:bg-white/[0.06]'
                 }`}>
-                <Icon />{label}
+                <Icon />{adminOrg && label === 'Admin users' ? 'Team' : label}
               </a>
             )
           })}
@@ -251,7 +301,7 @@ export function AdminLayout({ route, children }: { route: Route; children: React
             return (
               <a key={label} href={href} aria-current={active ? 'page' : undefined}
                 className={`h-9 px-4 rounded-full flex items-center text-[13px] font-bold font-display ${active ? 'bg-lime-400 text-ink' : 'bg-white/10 text-white/70'}`}>
-                {label}
+                {adminOrg && label === 'Admin users' ? 'Team' : label}
               </a>
             )
           })}
@@ -259,7 +309,10 @@ export function AdminLayout({ route, children }: { route: Route; children: React
       </header>
 
       <main className="lg:pl-[264px]">
-        <div className="max-w-[1180px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-10">{children}</div>
+        <div className="max-w-[1180px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-10">
+          <OrgStatusBanner />
+          {children}
+        </div>
       </main>
     </div>
   )

@@ -2,22 +2,32 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import type { DialogData, NewAccount, ToastData } from './types'
 import { MOCK_PROFILE, applyNewAccount } from './data'
 import { navigate } from './router'
-import { getUser, getRole, rolePermissions, useAccessVersion, type AdminUser, type Role as AdminRole } from './admin/access'
+import {
+  getUser, getRole, getOrganization, userPermissions, useAccessVersion,
+  type AdminUser, type Role as AdminRole, type Organization,
+} from './admin/access'
 
 /** First admin page this set of permissions can open */
 export function adminHomePath(perms: string[]) {
   if (perms.includes('dashboard.view')) return '/admin'
   if (perms.includes('tournaments.view')) return '/admin/tournaments'
   if (perms.includes('courses.view')) return '/admin/courses'
+  if (perms.includes('organisation.view')) return '/admin/organisation'
+  if (perms.includes('organizers.view')) return '/admin/organizers'
   if (perms.includes('roles.view')) return '/admin/roles'
   if (perms.includes('users.view')) return '/admin/users'
   return '/admin'
 }
 
+export type AccountType = 'golfer' | 'organizer'
+
 export interface AccountBasics {
   fullName: string
   email: string
   phone: string
+  /** Needed for organiser logins (golfer accounts are mock-only) */
+  password?: string
+  accountType?: AccountType
 }
 
 export type Role = 'golfer' | 'admin'
@@ -29,6 +39,8 @@ interface AppState {
   /** Signed-in admin login and its role (admin console only) */
   adminUser: AdminUser | undefined
   adminRole: AdminRole | undefined
+  /** The signed-in admin's organisation (undefined for platform staff) */
+  adminOrg: Organization | undefined
   /** Does the signed-in admin have this permission (e.g. "tournaments.edit")? */
   can: (perm: string) => boolean
   toast: ToastData | null
@@ -44,6 +56,7 @@ interface AppState {
   signOut: () => void
   startSetup: (b: AccountBasics) => void
   completeSetup: (a: NewAccount) => void
+  completeOrganizerSetup: (userId: string) => void
   touchProfile: () => void
 }
 
@@ -62,10 +75,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const accessVersion = useAccessVersion()
   const adminUser = role === 'admin' && adminUserId ? getUser(adminUserId) : undefined
   const adminRole = adminUser ? getRole(adminUser.roleId) : undefined
+  const adminOrg = getOrganization(adminUser?.organizationId)
   const perms = useMemo(
-    () => new Set(adminUser?.active ? rolePermissions(adminUser.roleId) : []),
+    () => new Set(userPermissions(adminUser)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [adminUser?.id, adminUser?.roleId, adminUser?.active, accessVersion],
+    [adminUser?.id, adminUser?.roleId, adminUser?.active, adminOrg?.status, accessVersion],
   )
   const can = useCallback((perm: string) => perms.has(perm), [perms])
 
@@ -87,7 +101,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAdminUserId(userId)
     setRole('admin')
     const user = getUser(userId)
-    navigate(adminHomePath(user ? rolePermissions(user.roleId) : []), { replace: true })
+    navigate(adminHomePath(userPermissions(user)), { replace: true })
     showToast(`Welcome, ${user?.name ?? 'admin'}`)
   }, [showToast])
 
@@ -109,8 +123,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const startSetup = useCallback((b: AccountBasics) => {
     setBasics(b)
-    navigate('/setup')
+    navigate(b.accountType === 'organizer' ? '/organizer-setup' : '/setup')
   }, [])
+
+  /** Organiser sign-up finished: their pending organisation exists, sign them into the console */
+  const completeOrganizerSetup = useCallback((userId: string) => {
+    setBasics(null)
+    setAdminUserId(userId)
+    setRole('admin')
+    navigate('/admin', { replace: true })
+    showToast('Application submitted — you can start drafting tournaments while we review it')
+  }, [showToast])
 
   const completeSetup = useCallback((a: NewAccount) => {
     applyNewAccount(a)
@@ -122,12 +145,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [showToast])
 
   const value = useMemo<AppState>(() => ({
-    isAuthenticated, role, basics, adminUser, adminRole, can, toast, dialog, profileVersion,
+    isAuthenticated, role, basics, adminUser, adminRole, adminOrg, can, toast, dialog, profileVersion,
     showToast, dismissToast, showDialog, closeDialog,
-    signIn, signInAdmin, signOut, startSetup, completeSetup, touchProfile,
-  }), [isAuthenticated, role, basics, adminUser, adminRole, can, toast, dialog, profileVersion,
+    signIn, signInAdmin, signOut, startSetup, completeSetup, completeOrganizerSetup, touchProfile,
+  }), [isAuthenticated, role, basics, adminUser, adminRole, adminOrg, can, toast, dialog, profileVersion,
        showToast, dismissToast, showDialog, closeDialog,
-       signIn, signInAdmin, signOut, startSetup, completeSetup, touchProfile])
+       signIn, signInAdmin, signOut, startSetup, completeSetup, completeOrganizerSetup, touchProfile])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

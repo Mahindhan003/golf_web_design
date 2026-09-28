@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TournamentStatus } from '../types'
 import { SearchInput, TournamentCard, SkeletonCard, EmptyState, Button } from '../components'
-import { MOCK_TOURNAMENTS } from '../data'
+import { publicTournaments } from '../admin/access'
 import { PageHeader, useFakeLoad } from '../shell'
 import { navigate } from '../router'
 
@@ -19,8 +19,8 @@ const FILTER_STATUS: Record<Filter, TournamentStatus[]> = {
 
 function countFor(filter: Filter) {
   return filter === 'All'
-    ? MOCK_TOURNAMENTS.length
-    : MOCK_TOURNAMENTS.filter(t => FILTER_STATUS[filter].includes(t.status)).length
+    ? publicTournaments().length
+    : publicTournaments().filter(t => FILTER_STATUS[filter].includes(t.status)).length
 }
 
 /* ───────── Filter dropdown ───────── */
@@ -86,7 +86,7 @@ export default function TournamentList() {
   }, [menuOpen])
 
   const filtered = useMemo(() => {
-    let list = MOCK_TOURNAMENTS
+    let list = publicTournaments()
     if (activeFilter !== 'All') list = list.filter(t => FILTER_STATUS[activeFilter].includes(t.status))
     if (search.trim()) {
       const q = search.toLowerCase()

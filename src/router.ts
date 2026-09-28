@@ -24,6 +24,9 @@ export type Route =
   | { name: 'admin-roles' }
   | { name: 'admin-role-edit'; id: string | null }
   | { name: 'admin-users' }
+  | { name: 'admin-organisation' }
+  | { name: 'admin-organizers' }
+  | { name: 'organizer-setup' }
   | { name: 'not-found' }
 
 export function parseHash(hash: string): Route {
@@ -39,12 +42,15 @@ export function parseHash(hash: string): Route {
     if (b === 'roles' && !c) return { name: 'admin-roles' }
     if (b === 'roles' && c) return { name: 'admin-role-edit', id: c === 'new' ? null : c }
     if (b === 'users' && !c) return { name: 'admin-users' }
+    if (b === 'organisation' && !c) return { name: 'admin-organisation' }
+    if (b === 'organizers' && !c) return { name: 'admin-organizers' }
     return { name: 'not-found' }
   }
   if (!a || a === 'home') return { name: 'home' }
   if (a === 'signin') return { name: 'signin' }
   if (a === 'signup') return { name: 'signup' }
   if (a === 'setup') return { name: 'setup' }
+  if (a === 'organizer-setup') return { name: 'organizer-setup' }
   if (a === 'tournaments' && !b) return { name: 'tournaments' }
   if (a === 'tournaments' && b && !c) return { name: 'tournament', id: b }
   if (a === 'courses' && b && !c) return { name: 'course', id: b }

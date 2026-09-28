@@ -138,7 +138,7 @@ export default function ProfileSetup() {
     <div className="min-h-screen bg-canvas">
       <header className="h-20 px-6 lg:px-10 flex items-center justify-between max-w-[1180px] mx-auto">
         <Wordmark />
-        <span className="text-[13px] font-bold font-display text-gray-500">Step 2 of 2 · Golfer profile</span>
+        <span className="text-[13px] font-bold font-display text-gray-500">Step 3 of 3 · Golfer profile</span>
       </header>
 
       <div className="max-w-[1180px] mx-auto px-6 lg:px-10 pb-16 grid lg:grid-cols-[300px_minmax(0,1fr)] gap-8 lg:gap-12">

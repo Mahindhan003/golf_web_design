@@ -30,6 +30,7 @@ export interface DialogData {
 }
 
 export type TournamentStatus =
+  | 'draft'
   | 'published'
   | 'registration-open'
   | 'registration-closed'
@@ -58,6 +59,8 @@ export interface Tournament {
   description: string
   courseId: string
   registrationStatus: RegistrationStatus
+  /** Organisation that runs it; undefined = run by the platform itself */
+  organizerId?: string
   players: number
   maxPlayers: number
   entryFee: string
@@ -91,6 +94,8 @@ export interface Course {
   designer: string
   tournamentId?: string
   holeData: HoleData[]
+  /** Organisation that added it; undefined = platform-managed course */
+  organizerId?: string
 }
 
 export interface GolferProfile {

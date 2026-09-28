@@ -93,13 +93,21 @@ interface TournamentFormProps {
   onSave: (t: Tournament) => void
   /** View-only: every field is disabled */
   readOnly?: boolean
+  /** Statuses this admin may choose (e.g. drafts only while an organisation is under review) */
+  statusOptions?: typeof STATUS_OPTIONS
+  /** Explains why the status list is limited */
+  statusNote?: string
 }
 
-export function TournamentForm({ formId, initial, onSave, readOnly }: TournamentFormProps) {
+export function TournamentForm({ formId, initial, onSave, readOnly, statusOptions = STATUS_OPTIONS, statusNote }: TournamentFormProps) {
   const [name, setName]           = useState(initial?.name ?? '')
   const [category, setCategory]   = useState(initial?.category ?? '')
   const [format, setFormat]       = useState<string>(initial?.format ?? '')
-  const [status, setStatus]       = useState<string>(initial?.status ?? 'published')
+  const [status, setStatus]       = useState<string>(initial?.status ?? statusOptions[0]?.value ?? 'draft')
+  // Keep the current status selectable even if it's outside the allowed list
+  const statusChoices = initial && !statusOptions.some(o => o.value === initial.status)
+    ? [...STATUS_OPTIONS.filter(o => o.value === initial.status), ...statusOptions]
+    : statusOptions
   const [courseId, setCourseId]   = useState(initial?.courseId ?? '')
   const [startDate, setStartDate] = useState(initial?.startDate ?? '')
   const [endDate, setEndDate]     = useState(initial?.endDate ?? initial?.startDate ?? '')
@@ -148,6 +156,7 @@ export function TournamentForm({ formId, initial, onSave, readOnly }: Tournament
     const s = status as TournamentStatus
     onSave({
       id: initial?.id ?? newId('t'),
+      organizerId: initial?.organizerId, // ownership never changes on edit
       name: name.trim(),
       category: category.trim(),
       format: format as TournamentFormat,
@@ -178,15 +187,17 @@ export function TournamentForm({ formId, initial, onSave, readOnly }: Tournament
         <div className="grid @md:grid-cols-2 gap-4">
           <Input label="Category" placeholder="e.g. Amateur Open Division" value={category}
             onChange={e => { setCategory(e.target.value); clear('category') }} error={errors.category} />
-          <SelectField label="Status" value={status} onChange={setStatus} options={STATUS_OPTIONS} />
+          <SelectField label="Status" value={status} onChange={setStatus} options={statusChoices} />
         </div>
         <p className="text-[12px] text-gray-500 -mt-2">
           {STATUS_OPTIONS.find(o => o.value === status)?.label} — {
-            status === 'registration-open' ? 'golfers can register now.'
+            status === 'draft' ? 'only visible in the admin console, not to golfers.'
+            : status === 'registration-open' ? 'golfers can register now.'
             : status === 'published' || status === 'upcoming' ? 'visible, registration not open yet.'
             : status === 'cancelled' ? 'shown as cancelled; registration disabled.'
             : 'registration disabled.'}
         </p>
+        {statusNote && <p className="text-[12px] font-semibold text-amber-700 bg-amber-50 rounded-xl px-3 py-2 -mt-1">{statusNote}</p>}
         <ChoiceChips label="Format" options={FORMATS} value={format}
           onChange={v => { setFormat(v as string); clear('format') }} error={errors.format} />
       </FormSection>

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import type { Tournament, TournamentStatus } from '../types'
-import { MOCK_TOURNAMENTS } from '../data'
 import { useDataVersion, upsertTournament, deleteTournament, setTournamentStatus, STATUS_OPTIONS } from '../store'
 import { PageHeader } from '../shell'
 import { Button, SearchInput, EmptyState } from '../components'
@@ -9,8 +8,15 @@ import { navigate } from '../router'
 import { TournamentForm } from './forms'
 import { IconPlus, IconPencil, IconTrash, NoAccess, Can } from './AdminShell'
 import { BackLink } from '../screens/TournamentDetails'
+import { scopedTournaments, canPublish, organizerName, type AdminUser } from './access'
+
+/** Statuses this admin may set: organisations under review can only keep events as drafts */
+function statusOptionsFor(actor?: AdminUser) {
+  return canPublish(actor) ? STATUS_OPTIONS : STATUS_OPTIONS.filter(o => o.value === 'draft')
+}
 
 const STATUS_TONE: Record<TournamentStatus, string> = {
+  'draft':               'bg-canvas text-gray-600',
   'registration-open':   'bg-emerald-50 text-emerald-700',
   'published':           'bg-amber-50 text-amber-700',
   'upcoming':            'bg-sky-50 text-sky-700',
@@ -21,8 +27,10 @@ const STATUS_TONE: Record<TournamentStatus, string> = {
 
 /** Status pill that doubles as a quick status changer */
 export function StatusSelect({ t }: { t: Tournament }) {
-  const { showToast, can } = useApp()
-  if (!can('tournaments.status')) {
+  const { showToast, can, adminUser } = useApp()
+  const allowed = statusOptionsFor(adminUser)
+  const options = allowed.some(o => o.value === t.status) ? allowed : [...STATUS_OPTIONS.filter(o => o.value === t.status), ...allowed]
+  if (!can('tournaments.status') || options.length < 2) {
     return (
       <span className={`h-8 px-3 rounded-full text-[12px] font-bold font-display inline-flex items-center ${STATUS_TONE[t.status]}`}>
         {STATUS_OPTIONS.find(o => o.value === t.status)?.label}
@@ -43,7 +51,7 @@ export function StatusSelect({ t }: { t: Tournament }) {
         backgroundRepeat: 'no-repeat', backgroundPosition: 'right 9px center',
       }}
     >
-      {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
   )
 }
@@ -63,21 +71,22 @@ export function useConfirmDeleteTournament() {
 
 export function AdminTournaments() {
   useDataVersion()
-  const { can } = useApp()
+  const { can, adminUser, adminOrg } = useApp()
+  const mine = scopedTournaments(adminUser)
   const confirmDelete = useConfirmDeleteTournament()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<'all' | TournamentStatus>('all')
 
   // Recomputed every render so edits made elsewhere show up immediately (useDataVersion re-renders us)
   const q = search.trim().toLowerCase()
-  const rows = MOCK_TOURNAMENTS.filter(t =>
+  const rows = mine.filter(t =>
     (status === 'all' || t.status === status) &&
     (!q || [t.name, t.venue, t.city, t.category, t.format].some(v => v.toLowerCase().includes(q))))
 
   return (
     <div className="page-in">
       <PageHeader
-        eyebrow="Admin console"
+        eyebrow={adminOrg?.name ?? 'Admin console'}
         title="Tournaments"
         actions={<Can perm="tournaments.create"><Button onClick={() => navigate('/admin/tournaments/new')}><IconPlus /> New tournament</Button></Can>}
       />
@@ -101,9 +110,9 @@ export function AdminTournaments() {
       <div className="bg-white rounded-[28px] shadow-card overflow-hidden">
         {rows.length === 0 ? (
           <EmptyState
-            title={MOCK_TOURNAMENTS.length ? 'No matching tournaments' : 'No tournaments yet'}
-            subtitle={MOCK_TOURNAMENTS.length ? 'Try a different search or status.' : 'Create your first tournament to publish it to golfers.'}
-            action={MOCK_TOURNAMENTS.length
+            title={mine.length ? 'No matching tournaments' : 'No tournaments yet'}
+            subtitle={mine.length ? 'Try a different search or status.' : adminOrg && !canPublish(adminUser) ? 'Create your first tournament as a draft — you can publish it once your organisation is approved.' : 'Create your first tournament to publish it to golfers.'}
+            action={mine.length
               ? { label: 'Clear filters', onClick: () => { setSearch(''); setStatus('all') } }
               : can('tournaments.create') ? { label: 'New tournament', onClick: () => navigate('/admin/tournaments/new') } : undefined}
           />
@@ -114,7 +123,7 @@ export function AdminTournaments() {
                 <tr className="text-[12px] font-bold font-display text-gray-400 border-b border-black/[0.05]">
                   <th className="py-3.5 pl-6 pr-3 font-bold">Tournament</th>
                   <th className="py-3.5 px-3 font-bold">Dates</th>
-                  <th className="py-3.5 px-3 font-bold hidden xl:table-cell">Course</th>
+                  <th className="py-3.5 px-3 font-bold hidden xl:table-cell">{adminOrg ? 'Course' : 'Run by'}</th>
                   <th className="py-3.5 px-3 font-bold">Players</th>
                   <th className="py-3.5 px-3 font-bold">Status</th>
                   <th className="py-3.5 pl-3 pr-6 font-bold text-right">Actions</th>
@@ -135,7 +144,9 @@ export function AdminTournaments() {
                         </a>
                       </td>
                       <td className="py-3.5 px-3 text-[13px] text-ink whitespace-nowrap">{t.dateRange}</td>
-                      <td className="py-3.5 px-3 text-[13px] text-gray-600 hidden xl:table-cell">{t.venue}</td>
+                      <td className="py-3.5 px-3 text-[13px] text-gray-600 hidden xl:table-cell">
+                        {adminOrg ? t.venue : (organizerName(t.organizerId) ?? <span className="text-gray-400">Platform</span>)}
+                      </td>
                       <td className="py-3.5 px-3 w-36">
                         <p className="text-[12px] font-semibold text-gray-600">{t.players} / {t.maxPlayers}</p>
                         <div className="h-1.5 bg-canvas rounded-full overflow-hidden mt-1"><div className={`h-full rounded-full ${pct >= 90 ? 'bg-rose-400' : 'bg-lime-500'}`} style={{ width: `${pct}%` }} /></div>
@@ -162,7 +173,7 @@ export function AdminTournaments() {
           </div>
         )}
       </div>
-      <p className="text-[12px] text-gray-400 mt-3">{rows.length} of {MOCK_TOURNAMENTS.length} tournaments · changes are saved in this browser</p>
+      <p className="text-[12px] text-gray-400 mt-3">{rows.length} of {mine.length} tournaments · drafts are only visible here · changes are saved in this browser</p>
     </div>
   )
 }
@@ -171,9 +182,11 @@ export function AdminTournaments() {
 
 export function AdminTournamentEditor({ id }: { id: string | null }) {
   useDataVersion()
-  const { showToast, can } = useApp()
+  const { showToast, can, adminUser } = useApp()
   const confirmDelete = useConfirmDeleteTournament()
-  const existing = id ? MOCK_TOURNAMENTS.find(t => t.id === id) : undefined
+  // Organisers can only open their own organisation's tournaments
+  const existing = id ? scopedTournaments(adminUser).find(t => t.id === id) : undefined
+  const publishable = canPublish(adminUser)
 
   if (id && !existing) {
     return (
@@ -209,8 +222,10 @@ export function AdminTournamentEditor({ id }: { id: string | null }) {
         formId="tournament-form"
         initial={existing}
         readOnly={readOnly}
+        statusOptions={statusOptionsFor(adminUser)}
+        statusNote={publishable ? undefined : 'Your organisation is under review, so tournaments stay as drafts until it’s approved.'}
         onSave={t => {
-          upsertTournament(t)
+          upsertTournament(isNew ? { ...t, organizerId: adminUser?.organizationId } : t)
           showToast(isNew ? `"${t.name}" created` : 'Tournament saved')
           done()
         }}
@@ -222,7 +237,8 @@ export function AdminTournamentEditor({ id }: { id: string | null }) {
       <div className="sticky bottom-4 mt-8 z-10">
         <div className="bg-ink rounded-full shadow-float p-2 pl-6 flex items-center gap-3">
           <p className="flex-1 text-[13px] font-medium text-white/60 truncate">
-            {isNew ? 'New tournaments appear to golfers as soon as you save' : 'Changes are visible to golfers as soon as you save'}
+            {!publishable ? 'Saved as a draft — publishing unlocks once your organisation is approved'
+              : isNew ? 'Drafts stay private; any other status is visible to golfers when you save' : 'Changes are visible to golfers as soon as you save'}
           </p>
           <button type="button" onClick={done} className="h-11 px-5 rounded-full text-white/80 text-sm font-semibold font-display hover:bg-white/10">Cancel</button>
           <Button type="submit" form="tournament-form" className="bg-lime-400! text-ink! shadow-none!">

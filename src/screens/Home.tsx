@@ -1,7 +1,8 @@
 import {
   SectionHeader, TournamentCard, StatusBadge, GlassChip, IconArrowRight, Button,
 } from '../components'
-import { MOCK_PROFILE, MOCK_TOURNAMENTS } from '../data'
+import { MOCK_PROFILE } from '../data'
+import { publicTournaments } from '../admin/access'
 import { PageHeader, useFakeLoad } from '../shell'
 import { useApp } from '../app-context'
 import { navigate } from '../router'
@@ -17,6 +18,8 @@ export default function Home() {
   const loading = useFakeLoad(700)
   const p = MOCK_PROFILE
 
+  // Golfers never see drafts or events from organisers awaiting approval
+  const MOCK_TOURNAMENTS = publicTournaments()
   const registered = MOCK_TOURNAMENTS.find(t => t.registrationStatus === 'registered')
   const open = MOCK_TOURNAMENTS.filter(t => t.registrationStatus === 'open')
   const upcoming = MOCK_TOURNAMENTS.filter(t => ['upcoming', 'published'].includes(t.status) && !open.includes(t))

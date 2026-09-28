@@ -538,6 +538,7 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; d
   'registered':        { label: 'Registered',           bg: 'bg-lime-300',   text: 'text-ink',         dot: 'bg-pine-800'    },
   'completed':         { label: 'Completed',            bg: 'bg-gray-100',   text: 'text-gray-600',    dot: 'bg-gray-400'    },
   'cancelled':         { label: 'Cancelled',            bg: 'bg-rose-100',   text: 'text-rose-800',    dot: 'bg-rose-700'    },
+  'draft':             { label: 'Draft',                bg: 'bg-canvas',     text: 'text-gray-600',    dot: 'bg-gray-400'    },
 }
 
 export function StatusBadge({ status, size = 'sm', onImage }: StatusBadgeProps) {

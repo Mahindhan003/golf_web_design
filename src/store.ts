@@ -12,7 +12,8 @@ import { MOCK_COURSES, MOCK_TOURNAMENTS } from './data'
  * This file is shared verbatim between the mobile and web projects.
  */
 
-const STORAGE_KEY = 'gtp-admin-data-v1'
+// v2: tournaments/courses carry organizerId and drafts exist
+const STORAGE_KEY = 'gtp-admin-data-v2'
 
 // Pristine copies for "Reset demo data"
 const DEFAULT_TOURNAMENTS: Tournament[] = structuredClone(MOCK_TOURNAMENTS)
@@ -41,6 +42,7 @@ function persist() {
 // Load saved edits once, at module init, before any screen renders
 ;(function load() {
   try {
+    localStorage.removeItem('gtp-admin-data-v1') // older format, before organisers
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return
     const saved = JSON.parse(raw) as { tournaments?: Tournament[]; courses?: Course[] }
@@ -124,6 +126,7 @@ export function resetDemoData() {
 /* ───────── Helpers ───────── */
 
 export const STATUS_OPTIONS: { value: TournamentStatus; label: string }[] = [
+  { value: 'draft',               label: 'Draft' },
   { value: 'published',           label: 'Coming soon' },
   { value: 'registration-open',   label: 'Registration open' },
   { value: 'registration-closed', label: 'Registration closed' },

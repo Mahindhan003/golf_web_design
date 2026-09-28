@@ -251,6 +251,7 @@ export const MOCK_TOURNAMENTS: Tournament[] = [
       'The Lowcountry Scramble Invitational brings together teams of four for a fun, fast-paced day of golf in historic Savannah. The scramble format — where the team plays from the best shot each hole — makes this event accessible and highly social. Past winners have posted scores as low as 15-under par. An end-of-day dinner and awards ceremony rounds out the experience.',
     courseId: 'c1',
     registrationStatus: 'closed',
+    organizerId: 'o-savannah',
     players: 40,
     maxPlayers: 40,
     entryFee: '$120/team',
@@ -305,6 +306,32 @@ export const MOCK_TOURNAMENTS: Tournament[] = [
     prize: 'Junior Trophy',
     imageUrl: 'https://images.unsplash.com/photo-1632946269126-0f8edbe8b068?w=800&h=500&fit=crop&auto=format',
   },
+  {
+    // Draft from an organiser still awaiting approval — hidden from golfers
+    id: 't7',
+    name: 'Monterey Bay Charity Scramble',
+    dateRange: 'Nov 21, 2026',
+    startDate: '2026-11-21',
+    endDate: '2026-11-21',
+    time: '10:00 AM shotgun start',
+    venue: 'Coastal Links at Carmel Bay',
+    location: 'Carmel-by-the-Sea, California, USA',
+    city: 'Carmel-by-the-Sea, California',
+    country: 'United States',
+    status: 'draft',
+    format: 'Scramble',
+    category: 'Charity Fundraiser',
+    description:
+      'A relaxed four-person scramble raising funds for coastal conservation. Includes lunch, on-course contests and an evening auction overlooking the bay.',
+    courseId: 'c2',
+    registrationStatus: 'closed',
+    organizerId: 'o-coastal',
+    players: 0,
+    maxPlayers: 72,
+    entryFee: '$150',
+    prize: 'Charity Cup',
+    imageUrl: 'https://images.unsplash.com/photo-1592919505780-303950717480?w=800&h=500&fit=crop&auto=format',
+  },
 ]
 
 export function getCourse(id: string): Course | undefined {
@@ -315,6 +342,7 @@ export function getTournament(id: string): Tournament | undefined {
   return MOCK_TOURNAMENTS.find(t => t.id === id)
 }
 
+/** All tournaments at a course, including drafts — golfer screens filter with isPublicTournament */
 export function getTournamentsByCourse(courseId: string): Tournament[] {
   return MOCK_TOURNAMENTS.filter(t => t.courseId === courseId)
 }

@@ -4,6 +4,7 @@ import {
   IconCalendar, IconClock, IconCourse, IconUsers, IconCheckCircle,
 } from '../components'
 import { getTournament, getCourse } from '../data'
+import { isPublicTournament, organizerName } from '../admin/access'
 import { useApp } from '../app-context'
 import { navigate } from '../router'
 import { useFakeLoad } from '../shell'
@@ -41,7 +42,9 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 export default function TournamentDetails({ id }: { id: string }) {
   const { showToast, showDialog } = useApp()
   const loading = useFakeLoad(600)
-  const t = getTournament(id)
+  // Drafts and events from organisers awaiting approval aren't public
+  const found = getTournament(id)
+  const t = found && isPublicTournament(found) ? found : undefined
   const [registered, setRegistered] = useState(t?.registrationStatus === 'registered')
   const [regLoading, setRegLoading] = useState(false)
 
@@ -141,6 +144,9 @@ export default function TournamentDetails({ id }: { id: string }) {
               <circle cx="7.5" cy="5.5" r="1.5" stroke="#c8ec5a" strokeWidth="1.3"/>
             </svg>
             {t.venue} · {t.location}
+          </p>
+          <p className="text-white/60 text-[13px] mt-1.5 font-semibold font-display">
+            Organised by <span className="text-white">{organizerName(t.organizerId) ?? 'Golf Tournament Platform'}</span>
           </p>
         </div>
       </div>

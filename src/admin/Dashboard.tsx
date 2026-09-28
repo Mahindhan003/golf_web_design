@@ -1,4 +1,5 @@
-import { MOCK_COURSES, MOCK_TOURNAMENTS } from '../data'
+import { MOCK_COURSES } from '../data'
+import { scopedTournaments, getOrganizations, useAccessVersion } from './access'
 import { useDataVersion, statusLabel } from '../store'
 import { PageHeader } from '../shell'
 import { Button, StatusBadge } from '../components'
@@ -22,7 +23,12 @@ function Stat({ label, value, sub, accent }: { label: string; value: string | nu
 
 export default function AdminDashboard() {
   useDataVersion()
-  const { can, adminUser, adminRole } = useApp()
+  useAccessVersion()
+  const { can, adminUser, adminRole, adminOrg } = useApp()
+  // Organisers only see numbers for their own events
+  const MOCK_TOURNAMENTS = scopedTournaments(adminUser)
+  const pendingOrgs = adminOrg ? [] : getOrganizations().filter(o => o.status === 'pending')
+  const drafts = MOCK_TOURNAMENTS.filter(t => t.status === 'draft').length
   const total = MOCK_TOURNAMENTS.length
   const open = MOCK_TOURNAMENTS.filter(t => t.status === 'registration-open').length
   const players = MOCK_TOURNAMENTS.reduce((s, t) => s + t.players, 0)
@@ -39,7 +45,7 @@ export default function AdminDashboard() {
   return (
     <div className="page-in">
       <PageHeader
-        eyebrow={`Welcome, ${adminUser?.name.split(' ')[0] ?? 'admin'} · ${adminRole?.name ?? ''}`}
+        eyebrow={`Welcome, ${adminUser?.name.split(' ')[0] ?? 'admin'} · ${adminRole?.name ?? ''}${adminOrg ? ` · ${adminOrg.name}` : ''}`}
         title="Dashboard"
         actions={
           <>
@@ -50,10 +56,12 @@ export default function AdminDashboard() {
       />
 
       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-5">
-        <Stat accent label="Tournaments" value={total} sub={`${open} open for registration`} />
+        <Stat accent label={adminOrg ? 'Your tournaments' : 'Tournaments'} value={total} sub={`${open} open for registration${drafts ? ` · ${drafts} draft${drafts === 1 ? '' : 's'}` : ''}`} />
         <Stat label="Players registered" value={players} sub={`${fill}% of total capacity`} />
         <Stat label="Courses" value={MOCK_COURSES.length} sub={`${new Set(MOCK_TOURNAMENTS.map(t => t.courseId)).size} hosting events`} />
-        <Stat label="Needs attention" value={nearlyFull.length} sub="Open events with ≤10 spots left" />
+        {pendingOrgs.length > 0 && can('organizers.view')
+          ? <Stat label="Organisers to review" value={pendingOrgs.length} sub="New organisations waiting for approval" />
+          : <Stat label="Needs attention" value={nearlyFull.length} sub="Open events with ≤10 spots left" />}
       </div>
 
       <div className="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-6 mt-8 items-start">
@@ -92,10 +100,24 @@ export default function AdminDashboard() {
         </section>
 
         <aside className="space-y-6">
+          {pendingOrgs.length > 0 && can('organizers.view') && (
+            <section className="bg-amber-50 rounded-[28px] p-6">
+              <h2 className="font-display font-bold text-amber-900 text-[17px] tracking-tight">Awaiting approval</h2>
+              <ul className="mt-3 space-y-2">
+                {pendingOrgs.slice(0, 4).map(o => (
+                  <li key={o.id} className="flex items-center justify-between gap-3 text-[14px]">
+                    <span className="font-semibold text-amber-900 truncate">{o.name}</span>
+                    <span className="text-amber-700 text-[12px] flex-shrink-0">{o.type}</span>
+                  </li>
+                ))}
+              </ul>
+              <a href="#/admin/organizers" className="mt-4 inline-flex h-10 px-4 rounded-full bg-amber-900 text-white text-[13px] font-bold font-display items-center">Review organisers</a>
+            </section>
+          )}
           <section className="bg-white rounded-[28px] shadow-card p-6">
             <h2 className="font-display font-bold text-ink text-[17px] tracking-tight mb-3">By status</h2>
             <ul className="space-y-2">
-              {(['registration-open', 'published', 'upcoming', 'registration-closed', 'completed', 'cancelled'] as const).map(s => {
+              {(['draft', 'registration-open', 'published', 'upcoming', 'registration-closed', 'completed', 'cancelled'] as const).map(s => {
                 const n = MOCK_TOURNAMENTS.filter(t => t.status === s).length
                 return (
                   <li key={s} className="flex items-center justify-between text-[14px]">

@@ -4,8 +4,9 @@ import { Button, Input, PasswordInput, SelectField, SearchInput, EmptyState } fr
 import { useApp } from '../app-context'
 import { IconPlus, IconPencil, NoAccess, Can } from './AdminShell'
 import {
-  getUsers, getRoles, getRole, saveUser, setUserActive, resetPassword, useAccessVersion,
-  SUPER_ADMIN_ROLE_ID, type AdminUser,
+  getRole, getOrganization, saveUser, setUserActive, resetPassword, useAccessVersion,
+  visibleUsers, visibleRoles, assignableRoles, canManageUser, isOrgOwner, rolePermissions,
+  SUPER_ADMIN_ROLE_ID, type AdminUser, type Role,
 } from './access'
 
 const initials = (name: string) => name.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -23,6 +24,13 @@ function formatSignIn(iso?: string) {
 function randomPassword() {
   const words = ['birdie', 'eagle', 'fairway', 'green', 'links', 'mulligan', 'putter', 'wedge']
   return `${words[Math.floor(Math.random() * words.length)]}${Math.floor(100 + Math.random() * 900)}`
+}
+
+/** Roles to offer for a user: what the actor may assign, plus the user's current role so it still displays */
+function roleOptions(actor: AdminUser | undefined, orgId: string | undefined, current?: string): Role[] {
+  const list = assignableRoles(actor, orgId)
+  const cur = current ? getRole(current) : undefined
+  return cur && !list.some(r => r.id === cur.id) ? [cur, ...list] : list
 }
 
 /* ───────── Modal shell ───────── */
@@ -51,10 +59,13 @@ function Modal({ title, subtitle, onClose, children }: { title: string; subtitle
 /* ───────── Add / edit user ───────── */
 
 function UserForm({ user, onClose }: { user?: AdminUser; onClose: () => void }) {
-  const { can, showToast } = useApp()
+  const { can, showToast, adminUser, adminOrg } = useApp()
   const isNew = !user
+  const orgId = user ? user.organizationId : adminUser?.organizationId
   const canAssign = can('users.assign-role')
-  const fallbackRole = getRoles().find(r => r.id === 'viewer')?.id ?? getRoles().find(r => !r.system)?.id ?? ''
+  const options = roleOptions(adminUser, orgId, user?.roleId)
+  // Without "Assign role", new users get the least powerful role available
+  const fallbackRole = [...assignableRoles(adminUser, orgId)].sort((a, b) => rolePermissions(a.id).length - rolePermissions(b.id).length)[0]?.id ?? ''
 
   const [name, setName]         = useState(user?.name ?? '')
   const [email, setEmail]       = useState(user?.email ?? '')
@@ -62,13 +73,14 @@ function UserForm({ user, onClose }: { user?: AdminUser; onClose: () => void }) 
   const [roleId, setRoleId]     = useState(user?.roleId ?? (canAssign ? '' : fallbackRole))
   const [error, setError]       = useState('')
 
-  const roleLocked = !canAssign || !!user?.system
+  const protectedRole = !!user && (user.system || isOrgOwner(user))
+  const roleLocked = !canAssign || protectedRole
   const selectedRole = getRole(roleId)
 
   function submit(e: FormEvent) {
     e.preventDefault()
     if (!roleId) { setError('Choose a role'); return }
-    const r = saveUser({ id: user?.id, name, email, password, roleId })
+    const r = saveUser(adminUser, { id: user?.id, name, email, password, roleId })
     if (!r.ok) { setError(r.reason); return }
     showToast(isNew ? `${name.trim()} added — share their temporary password securely` : 'Admin user saved')
     onClose()
@@ -76,8 +88,10 @@ function UserForm({ user, onClose }: { user?: AdminUser; onClose: () => void }) 
 
   return (
     <Modal
-      title={isNew ? 'Add admin user' : `Edit ${user!.name}`}
-      subtitle={isNew ? 'They can sign in at the admin console with this email and password.' : user!.email}
+      title={isNew ? (adminOrg ? `Add team member` : 'Add admin user') : `Edit ${user!.name}`}
+      subtitle={isNew
+        ? (adminOrg ? `They'll join ${adminOrg.name} and sign in at the admin console.` : 'Platform staff sign in at the admin console with this email and password.')
+        : user!.email}
       onClose={onClose}
     >
       <form onSubmit={submit} noValidate className="space-y-4">
@@ -90,16 +104,25 @@ function UserForm({ user, onClose }: { user?: AdminUser; onClose: () => void }) 
             <button type="button" onClick={() => setPassword(randomPassword())} className="text-[12px] font-semibold font-display text-gray-500 hover:text-ink">↻ Generate another</button>
           </div>
         )}
-        <SelectField
-          label="Role"
-          placeholder="Choose a role"
-          value={roleId}
-          onChange={v => { setRoleId(v); setError('') }}
-          options={getRoles().filter(r => !roleLocked || r.id === roleId).map(r => ({ value: r.id, label: r.name }))}
-        />
+        {roleLocked ? (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold text-gray-600 font-display">Role</span>
+            <span className="h-[52px] rounded-2xl bg-canvas px-4 flex items-center text-[15px] text-ink font-semibold">{selectedRole?.name ?? '—'}</span>
+          </div>
+        ) : (
+          <SelectField
+            label="Role"
+            placeholder="Choose a role"
+            value={roleId}
+            onChange={v => { setRoleId(v); setError('') }}
+            options={options.map(r => ({ value: r.id, label: r.name }))}
+          />
+        )}
         {selectedRole && <p className="text-[12px] text-gray-500 -mt-2">{selectedRole.description}</p>}
         {user?.system && <p className="text-[12px] text-gray-500">The built-in admin always keeps the Super Admin role.</p>}
-        {!canAssign && !user?.system && <p className="text-[12px] text-amber-700">Your role can't assign roles, so {isNew ? 'new users get' : 'the role stays'} {selectedRole?.name ?? 'the default role'}.</p>}
+        {user && isOrgOwner(user) && <p className="text-[12px] text-gray-500">The organisation owner always keeps the Organizer role.</p>}
+        {!canAssign && !protectedRole && <p className="text-[12px] text-amber-700">Your role can't assign roles, so {isNew ? 'new users get' : 'the role stays'} {selectedRole?.name ?? 'the default role'}.</p>}
+        {canAssign && !protectedRole && <p className="text-[12px] text-gray-500">Only roles with the same or fewer permissions than yours are listed.</p>}
 
         <div className="flex gap-2.5 pt-3">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
@@ -111,7 +134,7 @@ function UserForm({ user, onClose }: { user?: AdminUser; onClose: () => void }) 
 }
 
 function ResetPasswordForm({ user, onClose }: { user: AdminUser; onClose: () => void }) {
-  const { showToast } = useApp()
+  const { showToast, adminUser } = useApp()
   const [password, setPassword] = useState(randomPassword())
   const [error, setError] = useState('')
   return (
@@ -121,7 +144,7 @@ function ResetPasswordForm({ user, onClose }: { user: AdminUser; onClose: () => 
         className="space-y-4"
         onSubmit={e => {
           e.preventDefault()
-          const r = resetPassword(user.id, password)
+          const r = resetPassword(adminUser, user.id, password)
           if (!r.ok) return setError(r.reason)
           showToast(`Password reset for ${user.name}`)
           onClose()
@@ -140,9 +163,14 @@ function ResetPasswordForm({ user, onClose }: { user: AdminUser; onClose: () => 
 
 /* ───────── Page ───────── */
 
+const selectArrow = {
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%23374151' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 11px center',
+}
+
 export function AdminUsers() {
   useAccessVersion()
-  const { can, adminUser, showToast, showDialog } = useApp()
+  const { can, adminUser, adminOrg, showToast, showDialog } = useApp()
   const [search, setSearch]   = useState('')
   const [roleFilter, setRF]   = useState('')
   const [status, setStatus]   = useState<'all' | 'active' | 'inactive'>('all')
@@ -151,15 +179,16 @@ export function AdminUsers() {
 
   if (!can('users.view')) return <NoAccess what="view admin users" />
 
+  const isOrg = !!adminUser?.organizationId
+  const all = visibleUsers(adminUser)
   const q = search.trim().toLowerCase()
-  const users = getUsers().filter(u =>
-    (!q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)) &&
+  const users = all.filter(u =>
+    (!q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (getOrganization(u.organizationId)?.name.toLowerCase().includes(q) ?? false)) &&
     (!roleFilter || u.roleId === roleFilter) &&
     (status === 'all' || (status === 'active') === u.active))
-  const all = getUsers()
 
   function changeRole(u: AdminUser, roleId: string) {
-    const r = saveUser({ id: u.id, name: u.name, email: u.email, password: '', roleId })
+    const r = saveUser(adminUser, { id: u.id, name: u.name, email: u.email, password: '', roleId })
     if (!r.ok) showToast(r.reason, 'error')
     else showToast(`${u.name} is now ${getRole(roleId)?.name}`)
   }
@@ -172,12 +201,12 @@ export function AdminUsers() {
         confirmLabel: 'Deactivate',
         destructive: true,
         onConfirm: () => {
-          const r = setUserActive(u.id, false, adminUser?.id)
+          const r = setUserActive(adminUser, u.id, false)
           showToast(r.ok ? `${u.name} deactivated` : r.reason, r.ok ? 'info' : 'error')
         },
       })
     } else {
-      const r = setUserActive(u.id, true)
+      const r = setUserActive(adminUser, u.id, true)
       showToast(r.ok ? `${u.name} reactivated` : r.reason, r.ok ? 'success' : 'error')
     }
   }
@@ -192,25 +221,27 @@ export function AdminUsers() {
   return (
     <div className="page-in">
       <PageHeader
-        eyebrow="Administration"
-        title="Admin users"
-        actions={<Can perm="users.create"><Button onClick={() => setEditing('new')}><IconPlus /> Add admin user</Button></Can>}
+        eyebrow={isOrg ? adminOrg?.name : 'Administration'}
+        title={isOrg ? 'Team' : 'Admin users'}
+        actions={<Can perm="users.create"><Button onClick={() => setEditing('new')}><IconPlus /> {isOrg ? 'Add team member' : 'Add admin user'}</Button></Can>}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        {stat('Admin users', all.length)}
+        {stat(isOrg ? 'Team members' : 'Admin users', all.length)}
         {stat('Active', all.filter(u => u.active).length)}
-        {stat('Super Admins', all.filter(u => u.roleId === SUPER_ADMIN_ROLE_ID && u.active).length)}
+        {isOrg
+          ? stat('Organizers', all.filter(u => u.roleId === 'organizer' && u.active).length)
+          : stat('Organisations', new Set(all.map(u => u.organizationId).filter(Boolean)).size)}
         {stat('Roles in use', new Set(all.map(u => u.roleId)).size)}
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-5">
-        <div className="flex-1 min-w-[240px] max-w-[380px]"><SearchInput value={search} onChange={setSearch} placeholder="Search by name or email…" /></div>
+        <div className="flex-1 min-w-[240px] max-w-[380px]"><SearchInput value={search} onChange={setSearch} placeholder={isOrg ? 'Search your team…' : 'Search by name, email or organisation…'} /></div>
         <div className="w-[220px]">
           <select aria-label="Filter by role" value={roleFilter} onChange={e => setRF(e.target.value)}
             className="w-full h-12 rounded-full bg-white shadow-card px-5 text-[14px] font-semibold font-display text-ink border-0 appearance-none cursor-pointer">
             <option value="">All roles</option>
-            {getRoles().map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+            {visibleRoles(adminUser).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         </div>
         <div className="flex gap-1.5">
@@ -225,7 +256,7 @@ export function AdminUsers() {
 
       <div className="bg-white rounded-[28px] shadow-card overflow-hidden">
         {users.length === 0 ? (
-          <EmptyState title="No matching admin users" subtitle="Try a different search or filter."
+          <EmptyState title="No matching users" subtitle="Try a different search or filter."
             action={{ label: 'Clear filters', onClick: () => { setSearch(''); setRF(''); setStatus('all') } }} />
         ) : (
           <div className="overflow-x-auto">
@@ -233,6 +264,7 @@ export function AdminUsers() {
               <thead>
                 <tr className="text-[12px] font-bold font-display text-gray-400 border-b border-black/[0.05]">
                   <th className="py-3.5 pl-6 pr-3 font-bold">User</th>
+                  {!isOrg && <th className="py-3.5 px-3 font-bold hidden xl:table-cell">Organisation</th>}
                   <th className="py-3.5 px-3 font-bold">Role</th>
                   <th className="py-3.5 px-3 font-bold">Status</th>
                   <th className="py-3.5 px-3 font-bold hidden md:table-cell">Last sign-in</th>
@@ -242,8 +274,11 @@ export function AdminUsers() {
               <tbody className="divide-y divide-black/[0.05]">
                 {users.map(u => {
                   const isMe = u.id === adminUser?.id
+                  const owner = isOrgOwner(u)
                   const role = getRole(u.roleId)
-                  const roleEditable = can('users.assign-role') && !u.system
+                  const manageable = canManageUser(adminUser, u)
+                  const roleEditable = can('users.assign-role') && manageable && !u.system && !owner && !isMe
+                  const org = getOrganization(u.organizationId)
                   return (
                     <tr key={u.id} className={`transition-colors hover:bg-canvas/60 ${u.active ? '' : 'opacity-60'}`}>
                       <td className="py-3.5 pl-6 pr-3">
@@ -254,23 +289,26 @@ export function AdminUsers() {
                               {u.name}
                               {isMe && <span className="ml-2 h-5 px-2 rounded-full bg-ink text-lime-400 text-[10px] font-bold inline-flex items-center align-middle">You</span>}
                               {u.system && <span className="ml-2 h-5 px-2 rounded-full bg-canvas text-gray-600 text-[10px] font-bold inline-flex items-center align-middle">Built-in</span>}
+                              {owner && <span className="ml-2 h-5 px-2 rounded-full bg-canvas text-gray-600 text-[10px] font-bold inline-flex items-center align-middle">Owner</span>}
                             </span>
                             <span className="block text-[12px] text-gray-500">{u.email}</span>
                           </span>
                         </div>
                       </td>
+                      {!isOrg && (
+                        <td className="py-3.5 px-3 text-[13px] hidden xl:table-cell">
+                          {org ? <span className="text-ink font-semibold">{org.name}</span> : <span className="text-gray-400">Platform staff</span>}
+                        </td>
+                      )}
                       <td className="py-3.5 px-3">
                         {roleEditable ? (
                           <select aria-label={`Role for ${u.name}`} value={u.roleId} onChange={e => changeRole(u, e.target.value)}
                             className="h-9 pl-3.5 pr-8 rounded-full bg-canvas text-[13px] font-semibold font-display text-ink border-0 appearance-none cursor-pointer hover:bg-gray-200"
-                            style={{
-                              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%23374151' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
-                              backgroundRepeat: 'no-repeat', backgroundPosition: 'right 11px center',
-                            }}>
-                            {getRoles().map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                            style={selectArrow}>
+                            {roleOptions(adminUser, u.organizationId, u.roleId).map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                           </select>
                         ) : (
-                          <span className={`h-9 px-3.5 rounded-full text-[13px] font-semibold font-display inline-flex items-center ${u.roleId === SUPER_ADMIN_ROLE_ID ? 'bg-ink text-lime-400' : 'bg-canvas text-ink'}`}>
+                          <span className={`h-9 px-3.5 rounded-full text-[13px] font-semibold font-display inline-flex items-center ${u.roleId === SUPER_ADMIN_ROLE_ID || u.roleId === 'organizer' ? 'bg-ink text-lime-400' : 'bg-canvas text-ink'}`}>
                             {role?.name ?? 'Unknown role'}
                           </span>
                         )}
@@ -284,7 +322,7 @@ export function AdminUsers() {
                       <td className="py-3.5 px-3 text-[13px] text-gray-500 hidden md:table-cell">{formatSignIn(u.lastSignIn)}</td>
                       <td className="py-3.5 pl-3 pr-6">
                         <div className="flex justify-end gap-1.5">
-                          {can('users.edit') && (
+                          {can('users.edit') && manageable && (
                             <>
                               <button onClick={() => setEditing(u)} aria-label={`Edit ${u.name}`} title="Edit"
                                 className="w-9 h-9 rounded-full bg-canvas text-ink flex items-center justify-center hover:bg-gray-200"><IconPencil /></button>
@@ -294,7 +332,7 @@ export function AdminUsers() {
                               </button>
                             </>
                           )}
-                          {can('users.deactivate') && !u.system && !isMe && (
+                          {can('users.deactivate') && manageable && !u.system && !owner && !isMe && (
                             <button onClick={() => toggleActive(u)}
                               className={`h-9 px-3.5 rounded-full text-[12px] font-bold font-display ${u.active ? 'bg-rose-50 text-rose-600 hover:bg-rose-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>
                               {u.active ? 'Deactivate' : 'Reactivate'}
@@ -310,7 +348,9 @@ export function AdminUsers() {
           </div>
         )}
       </div>
-      <p className="text-[12px] text-gray-400 mt-3">Each admin user has one role. Role changes take effect immediately.</p>
+      <p className="text-[12px] text-gray-400 mt-3">
+        Each user has one role. Role changes take effect immediately.{isOrg ? ' You can only give roles that have the same or fewer permissions than yours.' : ''}
+      </p>
 
       {editing && <UserForm user={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
       {resetting && <ResetPasswordForm user={resetting} onClose={() => setResetting(null)} />}

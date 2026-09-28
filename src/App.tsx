@@ -8,6 +8,7 @@ import { EmptyState } from './components'
 import SignIn from './screens/SignIn'
 import SignUp from './screens/SignUp'
 import ProfileSetup from './screens/ProfileSetup'
+import OrganizerSetup from './screens/OrganizerSetup'
 import Home from './screens/Home'
 import TournamentList from './screens/TournamentList'
 import TournamentDetails from './screens/TournamentDetails'
@@ -17,11 +18,12 @@ import EditProfile from './screens/EditProfile'
 import { AdminLogin, AdminLayout, NoAccess } from './admin/AdminShell'
 import { AdminRoles, AdminRoleEditor } from './admin/ManageRoles'
 import { AdminUsers } from './admin/ManageUsers'
+import { AdminOrganisation, AdminOrganizers } from './admin/Organizations'
 import AdminDashboard from './admin/Dashboard'
 import { AdminTournaments, AdminTournamentEditor } from './admin/ManageTournaments'
 import { AdminCourses, AdminCourseEditor } from './admin/ManageCourses'
 
-const AUTH_ROUTES: Route['name'][] = ['signin', 'signup', 'setup', 'admin-login']
+const AUTH_ROUTES: Route['name'][] = ['signin', 'signup', 'setup', 'organizer-setup', 'admin-login']
 const isAdminRoute = (r: Route) => r.name.startsWith('admin') && r.name !== 'admin-login'
 
 function NotFound({ home }: { home: string }) {
@@ -48,6 +50,7 @@ function Routes() {
   if (!role) {
     if (route.name === 'signup') return <SignUp />
     if (route.name === 'setup') return <ProfileSetup />
+    if (route.name === 'organizer-setup') return <OrganizerSetup />
     if (route.name === 'admin-login' || isAdminRoute(route)) return <AdminLogin />
     return <SignIn />
   }
@@ -66,6 +69,8 @@ function Routes() {
         case 'admin-roles':           return <AdminRoles key={key} />
         case 'admin-role-edit':       return <AdminRoleEditor key={key} id={route.id} />
         case 'admin-users':           return <AdminUsers key={key} />
+        case 'admin-organisation':    return <AdminOrganisation key={key} />
+        case 'admin-organizers':      return <AdminOrganizers key={key} />
         default:                      return <NotFound home="/admin" />
       }
     })()
