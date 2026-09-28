@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import './store' // load any saved admin edits before the first render
-import { AppProvider, useApp } from './app-context'
+import { AppProvider, useApp, adminHomePath } from './app-context'
+import { ALL_PERMISSIONS } from './admin/access'
 import { useRoute, navigate, type Route } from './router'
 import { AppLayout, Toast, Dialog } from './shell'
 import { EmptyState } from './components'
@@ -13,7 +14,9 @@ import TournamentDetails from './screens/TournamentDetails'
 import CourseDetails from './screens/CourseDetails'
 import Profile from './screens/Profile'
 import EditProfile from './screens/EditProfile'
-import { AdminLogin, AdminLayout } from './admin/AdminShell'
+import { AdminLogin, AdminLayout, NoAccess } from './admin/AdminShell'
+import { AdminRoles, AdminRoleEditor } from './admin/ManageRoles'
+import { AdminUsers } from './admin/ManageUsers'
 import AdminDashboard from './admin/Dashboard'
 import { AdminTournaments, AdminTournamentEditor } from './admin/ManageTournaments'
 import { AdminCourses, AdminCourseEditor } from './admin/ManageCourses'
@@ -32,15 +35,15 @@ function NotFound({ home }: { home: string }) {
 
 function Routes() {
   const { route } = useRoute()
-  const { role } = useApp()
+  const { role, can } = useApp()
   const isAuthRoute = AUTH_ROUTES.includes(route.name)
 
   // Guards: signed-out users only see sign-in pages; each role stays in its own area
   useEffect(() => {
     if (!role && !isAuthRoute) navigate(isAdminRoute(route) ? '/admin/login' : '/signin', { replace: true })
     else if (role === 'golfer' && (isAuthRoute || isAdminRoute(route))) navigate('/home', { replace: true })
-    else if (role === 'admin' && (isAuthRoute || !isAdminRoute(route))) navigate('/admin', { replace: true })
-  }, [role, isAuthRoute, route])
+    else if (role === 'admin' && (isAuthRoute || !isAdminRoute(route))) navigate(adminHomePath(ALL_PERMISSIONS.filter(can)), { replace: true })
+  }, [role, isAuthRoute, route, can])
 
   if (!role) {
     if (route.name === 'signup') return <SignUp />
@@ -55,11 +58,14 @@ function Routes() {
     if (!isAdminRoute(route)) return null
     const page = (() => {
       switch (route.name) {
-        case 'admin':                 return <AdminDashboard key={key} />
-        case 'admin-tournaments':     return <AdminTournaments key={key} />
+        case 'admin':                 return can('dashboard.view') ? <AdminDashboard key={key} /> : <NoAccess what="view the dashboard" />
+        case 'admin-tournaments':     return can('tournaments.view') ? <AdminTournaments key={key} /> : <NoAccess what="view tournaments" />
         case 'admin-tournament-edit': return <AdminTournamentEditor key={key} id={route.id} />
-        case 'admin-courses':         return <AdminCourses key={key} />
+        case 'admin-courses':         return can('courses.view') ? <AdminCourses key={key} /> : <NoAccess what="view courses" />
         case 'admin-course-edit':     return <AdminCourseEditor key={key} id={route.id} />
+        case 'admin-roles':           return <AdminRoles key={key} />
+        case 'admin-role-edit':       return <AdminRoleEditor key={key} id={route.id} />
+        case 'admin-users':           return <AdminUsers key={key} />
         default:                      return <NotFound home="/admin" />
       }
     })()

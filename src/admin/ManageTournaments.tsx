@@ -7,7 +7,7 @@ import { Button, SearchInput, EmptyState } from '../components'
 import { useApp } from '../app-context'
 import { navigate } from '../router'
 import { TournamentForm } from './forms'
-import { IconPlus, IconPencil, IconTrash } from './AdminShell'
+import { IconPlus, IconPencil, IconTrash, NoAccess, Can } from './AdminShell'
 import { BackLink } from '../screens/TournamentDetails'
 
 const STATUS_TONE: Record<TournamentStatus, string> = {
@@ -21,7 +21,14 @@ const STATUS_TONE: Record<TournamentStatus, string> = {
 
 /** Status pill that doubles as a quick status changer */
 export function StatusSelect({ t }: { t: Tournament }) {
-  const { showToast } = useApp()
+  const { showToast, can } = useApp()
+  if (!can('tournaments.status')) {
+    return (
+      <span className={`h-8 px-3 rounded-full text-[12px] font-bold font-display inline-flex items-center ${STATUS_TONE[t.status]}`}>
+        {STATUS_OPTIONS.find(o => o.value === t.status)?.label}
+      </span>
+    )
+  }
   return (
     <select
       aria-label={`Status for ${t.name}`}
@@ -56,6 +63,7 @@ export function useConfirmDeleteTournament() {
 
 export function AdminTournaments() {
   useDataVersion()
+  const { can } = useApp()
   const confirmDelete = useConfirmDeleteTournament()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<'all' | TournamentStatus>('all')
@@ -71,7 +79,7 @@ export function AdminTournaments() {
       <PageHeader
         eyebrow="Admin console"
         title="Tournaments"
-        actions={<Button onClick={() => navigate('/admin/tournaments/new')}><IconPlus /> New tournament</Button>}
+        actions={<Can perm="tournaments.create"><Button onClick={() => navigate('/admin/tournaments/new')}><IconPlus /> New tournament</Button></Can>}
       />
 
       <div className="flex flex-wrap items-center gap-3 mb-5">
@@ -97,7 +105,7 @@ export function AdminTournaments() {
             subtitle={MOCK_TOURNAMENTS.length ? 'Try a different search or status.' : 'Create your first tournament to publish it to golfers.'}
             action={MOCK_TOURNAMENTS.length
               ? { label: 'Clear filters', onClick: () => { setSearch(''); setStatus('all') } }
-              : { label: 'New tournament', onClick: () => navigate('/admin/tournaments/new') }}
+              : can('tournaments.create') ? { label: 'New tournament', onClick: () => navigate('/admin/tournaments/new') } : undefined}
           />
         ) : (
           <div className="overflow-x-auto">
@@ -135,10 +143,15 @@ export function AdminTournaments() {
                       <td className="py-3.5 px-3"><StatusSelect t={t} /></td>
                       <td className="py-3.5 pl-3 pr-6">
                         <div className="flex justify-end gap-1.5">
-                          <a href={`#/admin/tournaments/${t.id}`} aria-label={`Edit ${t.name}`} title="Edit"
-                            className="w-9 h-9 rounded-full bg-canvas text-ink flex items-center justify-center hover:bg-gray-200"><IconPencil /></a>
-                          <button onClick={() => confirmDelete(t)} aria-label={`Delete ${t.name}`} title="Delete"
-                            className="w-9 h-9 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-100"><IconTrash /></button>
+                          {can('tournaments.edit') ? (
+                            <a href={`#/admin/tournaments/${t.id}`} aria-label={`Edit ${t.name}`} title="Edit"
+                              className="w-9 h-9 rounded-full bg-canvas text-ink flex items-center justify-center hover:bg-gray-200"><IconPencil /></a>
+                          ) : (
+                            <a href={`#/admin/tournaments/${t.id}`} aria-label={`View ${t.name}`}
+                              className="h-9 px-3.5 rounded-full bg-canvas text-ink text-[12px] font-bold font-display flex items-center hover:bg-gray-200">View</a>
+                          )}
+                          {can('tournaments.delete') && <button onClick={() => confirmDelete(t)} aria-label={`Delete ${t.name}`} title="Delete"
+                            className="w-9 h-9 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-100"><IconTrash /></button>}
                         </div>
                       </td>
                     </tr>
@@ -158,7 +171,7 @@ export function AdminTournaments() {
 
 export function AdminTournamentEditor({ id }: { id: string | null }) {
   useDataVersion()
-  const { showToast } = useApp()
+  const { showToast, can } = useApp()
   const confirmDelete = useConfirmDeleteTournament()
   const existing = id ? MOCK_TOURNAMENTS.find(t => t.id === id) : undefined
 
@@ -173,14 +186,17 @@ export function AdminTournamentEditor({ id }: { id: string | null }) {
 
   const isNew = !existing
   const done = () => navigate('/admin/tournaments')
+  if (isNew && !can('tournaments.create')) return <NoAccess what="create tournaments" />
+  if (!can('tournaments.view')) return <NoAccess what="view tournaments" />
+  const readOnly = !isNew && !can('tournaments.edit')
 
   return (
     <div className="page-in max-w-[920px]">
       <BackLink label="Tournaments" onClick={done} />
       <PageHeader
-        eyebrow={isNew ? 'Create' : 'Edit'}
+        eyebrow={isNew ? 'Create' : readOnly ? 'View only' : 'Edit'}
         title={isNew ? 'New tournament' : existing.name}
-        actions={!isNew && (
+        actions={!isNew && can('tournaments.delete') && (
           <button onClick={() => confirmDelete(existing, done)}
             className="h-11 px-4 rounded-full bg-rose-50 text-rose-600 text-[14px] font-bold font-display flex items-center gap-2 hover:bg-rose-100">
             <IconTrash /> Delete
@@ -192,6 +208,7 @@ export function AdminTournamentEditor({ id }: { id: string | null }) {
         key={existing?.id ?? 'new'}
         formId="tournament-form"
         initial={existing}
+        readOnly={readOnly}
         onSave={t => {
           upsertTournament(t)
           showToast(isNew ? `"${t.name}" created` : 'Tournament saved')
@@ -199,6 +216,9 @@ export function AdminTournamentEditor({ id }: { id: string | null }) {
         }}
       />
 
+      {readOnly ? (
+        <p className="mt-6 text-[13px] text-gray-500">Your role can view this tournament but not change it.</p>
+      ) : (
       <div className="sticky bottom-4 mt-8 z-10">
         <div className="bg-ink rounded-full shadow-float p-2 pl-6 flex items-center gap-3">
           <p className="flex-1 text-[13px] font-medium text-white/60 truncate">
@@ -210,6 +230,7 @@ export function AdminTournamentEditor({ id }: { id: string | null }) {
           </Button>
         </div>
       </div>
+      )}
     </div>
   )
 }

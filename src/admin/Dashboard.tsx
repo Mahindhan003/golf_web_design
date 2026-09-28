@@ -3,7 +3,8 @@ import { useDataVersion, statusLabel } from '../store'
 import { PageHeader } from '../shell'
 import { Button, StatusBadge } from '../components'
 import { navigate } from '../router'
-import { IconPlus } from './AdminShell'
+import { IconPlus, Can } from './AdminShell'
+import { useApp } from '../app-context'
 
 function Stat({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: boolean }) {
   return (
@@ -21,6 +22,7 @@ function Stat({ label, value, sub, accent }: { label: string; value: string | nu
 
 export default function AdminDashboard() {
   useDataVersion()
+  const { can, adminUser, adminRole } = useApp()
   const total = MOCK_TOURNAMENTS.length
   const open = MOCK_TOURNAMENTS.filter(t => t.status === 'registration-open').length
   const players = MOCK_TOURNAMENTS.reduce((s, t) => s + t.players, 0)
@@ -37,12 +39,12 @@ export default function AdminDashboard() {
   return (
     <div className="page-in">
       <PageHeader
-        eyebrow="Admin console"
+        eyebrow={`Welcome, ${adminUser?.name.split(' ')[0] ?? 'admin'} · ${adminRole?.name ?? ''}`}
         title="Dashboard"
         actions={
           <>
-            <Button variant="secondary" onClick={() => navigate('/admin/courses/new')}><IconPlus /> New course</Button>
-            <Button onClick={() => navigate('/admin/tournaments/new')}><IconPlus /> New tournament</Button>
+            <Can perm="courses.create"><Button variant="secondary" onClick={() => navigate('/admin/courses/new')}><IconPlus /> New course</Button></Can>
+            <Can perm="tournaments.create"><Button onClick={() => navigate('/admin/tournaments/new')}><IconPlus /> New tournament</Button></Can>
           </>
         }
       />
@@ -58,7 +60,7 @@ export default function AdminDashboard() {
         <section className="bg-white rounded-[28px] shadow-card p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-display font-bold text-ink text-[19px] tracking-tight">Upcoming tournaments</h2>
-            <a href="#/admin/tournaments" className="text-[13px] font-semibold font-display text-gray-500 hover:text-ink">Manage all</a>
+            {can('tournaments.view') && <a href="#/admin/tournaments" className="text-[13px] font-semibold font-display text-gray-500 hover:text-ink">Manage all</a>}
           </div>
           {upcoming.length === 0 ? (
             <p className="text-gray-500 text-sm py-6 text-center">No upcoming tournaments. Create one to get started.</p>
@@ -68,7 +70,7 @@ export default function AdminDashboard() {
                 const pct = Math.min(100, Math.round((t.players / t.maxPlayers) * 100))
                 return (
                   <li key={t.id}>
-                    <a href={`#/admin/tournaments/${t.id}`} className="flex items-center gap-4 py-3.5 group">
+                    <a href={can('tournaments.view') ? `#/admin/tournaments/${t.id}` : undefined} className="flex items-center gap-4 py-3.5 group">
                       <img src={t.imageUrl} alt="" className="w-14 h-14 rounded-2xl object-cover flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="font-display font-bold text-ink text-[15px] tracking-tight truncate group-hover:underline decoration-lime-500 decoration-2 underline-offset-4">{t.name}</p>
@@ -105,17 +107,17 @@ export default function AdminDashboard() {
             </ul>
           </section>
 
-          <section className="bg-lime-400 rounded-[28px] p-6">
+          {(can('tournaments.create') || can('courses.create')) && <section className="bg-lime-400 rounded-[28px] p-6">
             <h2 className="font-display font-bold text-ink text-[17px] tracking-tight">Quick actions</h2>
             <div className="mt-4 space-y-2">
-              <a href="#/admin/tournaments/new" className="flex items-center justify-between h-12 px-4 rounded-full bg-ink text-white text-[14px] font-bold font-display hover:bg-pine-900">
+              {can('tournaments.create') && <a href="#/admin/tournaments/new" className="flex items-center justify-between h-12 px-4 rounded-full bg-ink text-white text-[14px] font-bold font-display hover:bg-pine-900">
                 Create tournament <IconPlus />
-              </a>
-              <a href="#/admin/courses/new" className="flex items-center justify-between h-12 px-4 rounded-full bg-white text-ink text-[14px] font-bold font-display hover:bg-canvas">
+              </a>}
+              {can('courses.create') && <a href="#/admin/courses/new" className="flex items-center justify-between h-12 px-4 rounded-full bg-white text-ink text-[14px] font-bold font-display hover:bg-canvas">
                 Add course <IconPlus />
-              </a>
+              </a>}
             </div>
-          </section>
+          </section>}
         </aside>
       </div>
     </div>

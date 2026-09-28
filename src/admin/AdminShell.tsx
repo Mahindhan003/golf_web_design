@@ -3,7 +3,9 @@ import type { Route } from '../router'
 import { useApp } from '../app-context'
 import { AuthLayout, Wordmark } from '../shell'
 import { Button, Input, PasswordInput, IconSignOut } from '../components'
-import { isAdminLogin, resetDemoData, ADMIN_EMAIL } from '../store'
+import { resetDemoData } from '../store'
+import { authenticate } from './access'
+import { navigate } from '../router'
 
 /* ───────── Icons (currentColor so the nav can tint them) ───────── */
 
@@ -35,6 +37,56 @@ export function IconFlag() {
     </svg>
   )
 }
+export function IconShield() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+      <path d="M8.5 12l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+export function IconUsersNav() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <circle cx="9" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8"/>
+      <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+      <path d="M16 4.5a3.5 3.5 0 010 7M18.5 14.5c1.9.8 3 2.7 3 5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+    </svg>
+  )
+}
+export function IconLock() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+      <rect x="4.5" y="10.5" width="15" height="10" rx="2.5" stroke="currentColor" strokeWidth="1.8"/>
+      <path d="M8 10.5V7.5a4 4 0 018 0v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+/* ───────── Permission helpers ───────── */
+
+/** Renders children only if the signed-in admin has the permission (like chitfund's <Kcplsecure>) */
+export function Can({ perm, children, fallback = null }: { perm: string; children: ReactNode; fallback?: ReactNode }) {
+  const { can } = useApp()
+  return <>{can(perm) ? children : fallback}</>
+}
+
+/** Shown when an admin opens a page their role doesn't allow */
+export function NoAccess({ what }: { what: string }) {
+  const { can, adminRole } = useApp()
+  const home = can('dashboard.view') ? '/admin' : null
+  return (
+    <div className="bg-white rounded-[32px] shadow-card flex flex-col items-center text-center py-16 px-8 page-in">
+      <span className="w-20 h-20 rounded-full bg-canvas text-gray-400 flex items-center justify-center"><IconLock /></span>
+      <h2 className="font-display font-bold text-ink text-[22px] tracking-tight mt-5">You don't have access</h2>
+      <p className="text-sm text-gray-500 mt-2 max-w-[360px] leading-relaxed">
+        Your role{adminRole ? <> (<span className="font-semibold text-ink">{adminRole.name}</span>)</> : ''} doesn't include permission to {what}. Ask a Super Admin if you need it.
+      </p>
+      {home && <Button size="sm" variant="secondary" className="mt-6" onClick={() => navigate(home)}>Go to dashboard</Button>}
+    </div>
+  )
+}
+
 export function IconPlus() {
   return <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 3.5v11M3.5 9h11" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
 }
@@ -64,8 +116,11 @@ export function AdminLogin() {
     setLoading(true)
     setTimeout(() => {
       setLoading(false)
-      if (isAdminLogin(email, password)) signInAdmin()
-      else setError('Invalid admin credentials')
+      const r = authenticate(email, password)
+      if (r.ok) signInAdmin(r.user.id)
+      else setError(r.reason === 'inactive'
+        ? 'This admin account has been deactivated. Contact a Super Admin.'
+        : 'Invalid admin credentials')
     }, 900)
   }
 
@@ -91,7 +146,7 @@ export function AdminLogin() {
       )}
 
       <form onSubmit={submit} noValidate className="flex flex-col gap-4 mt-8">
-        <Input label="Admin email" type="email" placeholder={ADMIN_EMAIL} value={email}
+        <Input label="Admin email" type="email" placeholder="admin@gmail.com" value={email}
           onChange={e => { setEmail(e.target.value); setError('') }} autoComplete="username" onCanvas />
         <PasswordInput label="Password" placeholder="Enter admin password" value={password}
           onChange={e => { setPassword(e.target.value); setError('') }} autoComplete="current-password" onCanvas />
@@ -116,7 +171,18 @@ const NAV = [
   { label: 'Dashboard',   href: '#/admin',             Icon: IconDashboard, match: ['admin'] },
   { label: 'Tournaments', href: '#/admin/tournaments', Icon: IconTrophy,    match: ['admin-tournaments', 'admin-tournament-edit'] },
   { label: 'Courses',     href: '#/admin/courses',     Icon: IconFlag,      match: ['admin-courses', 'admin-course-edit'] },
+  { label: 'Roles & permissions', href: '#/admin/roles', Icon: IconShield,   match: ['admin-roles', 'admin-role-edit'] },
+  { label: 'Admin users', href: '#/admin/users',       Icon: IconUsersNav,  match: ['admin-users'] },
 ]
+
+/** Which permission lets you see each nav item */
+const NAV_PERM: Record<string, string> = {
+  Dashboard: 'dashboard.view',
+  Tournaments: 'tournaments.view',
+  Courses: 'courses.view',
+  'Roles & permissions': 'roles.view',
+  'Admin users': 'users.view',
+}
 
 function useResetDemo() {
   const { showDialog, showToast } = useApp()
@@ -130,8 +196,10 @@ function useResetDemo() {
 }
 
 export function AdminLayout({ route, children }: { route: Route; children: ReactNode }) {
-  const { signOut } = useApp()
+  const { signOut, can, adminUser, adminRole } = useApp()
   const reset = useResetDemo()
+  const nav = NAV.filter(n => can(NAV_PERM[n.label]))
+  const initials = (adminUser?.name ?? 'A').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -143,7 +211,7 @@ export function AdminLayout({ route, children }: { route: Route; children: React
         </span>
 
         <nav className="mt-8 flex flex-col gap-1.5" aria-label="Admin">
-          {NAV.map(({ label, href, Icon, match }) => {
+          {nav.map(({ label, href, Icon, match }) => {
             const active = match.includes(route.name)
             return (
               <a key={label} href={href} aria-current={active ? 'page' : undefined}
@@ -156,14 +224,14 @@ export function AdminLayout({ route, children }: { route: Route; children: React
           })}
         </nav>
 
-        <button onClick={reset} className="mt-auto h-10 px-4 rounded-full text-left text-white/50 hover:text-white hover:bg-white/[0.06] text-[13px] font-semibold font-display transition-colors">
+        {can('settings.reset-data') && <button onClick={reset} className="mt-auto h-10 px-4 rounded-full text-left text-white/50 hover:text-white hover:bg-white/[0.06] text-[13px] font-semibold font-display transition-colors">
           ↺ Reset demo data
-        </button>
-        <div className="mt-3 flex items-center gap-3 rounded-full bg-white/[0.06] p-1.5 pr-2">
-          <span className="w-9 h-9 rounded-full bg-lime-400 flex items-center justify-center font-display font-extrabold text-ink text-[13px]">A</span>
+        </button>}
+        <div className={`${can('settings.reset-data') ? 'mt-3' : 'mt-auto'} flex items-center gap-3 rounded-full bg-white/[0.06] p-1.5 pr-2`}>
+          <span className="w-9 h-9 rounded-full bg-lime-400 flex items-center justify-center font-display font-extrabold text-ink text-[13px]">{initials}</span>
           <div className="flex-1 min-w-0">
-            <p className="text-white text-[13px] font-bold font-display">Administrator</p>
-            <p className="text-white/45 text-[11px] truncate">{ADMIN_EMAIL}</p>
+            <p className="text-white text-[13px] font-bold font-display truncate">{adminUser?.name ?? 'Admin'}</p>
+            <p className="text-white/45 text-[11px] truncate">{adminRole?.name ?? 'No role'}</p>
           </div>
           <button onClick={signOut} aria-label="Sign out" title="Sign out" className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition-colors">
             <IconSignOut />
@@ -177,8 +245,8 @@ export function AdminLayout({ route, children }: { route: Route; children: React
           <Wordmark dark />
           <button onClick={signOut} className="h-9 px-4 rounded-full bg-white/10 text-white text-[13px] font-bold font-display">Sign out</button>
         </div>
-        <nav className="flex gap-1.5 px-4 sm:px-6 pb-3" aria-label="Admin">
-          {NAV.map(({ label, href, match }) => {
+        <nav className="flex gap-1.5 px-4 sm:px-6 pb-3 overflow-x-auto no-scrollbar whitespace-nowrap" aria-label="Admin">
+          {nav.map(({ label, href, match }) => {
             const active = match.includes(route.name)
             return (
               <a key={label} href={href} aria-current={active ? 'page' : undefined}

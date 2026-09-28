@@ -94,6 +94,10 @@ body {
 }
 .pop-in { animation: popIn 0.16s ease-out backwards; transform-origin: top right; }
 
+/* Read-only form fields (disabled directly or via a disabled fieldset) */
+:is(input, select, textarea):disabled { cursor: not-allowed; opacity: 0.7; }
+fieldset:disabled button { cursor: not-allowed; }
+
 /* Visible keyboard focus for mouse/keyboard users on web */
 button:focus-visible, a:focus-visible, [role="button"]:focus-visible {
   outline: 2px solid var(--color-lime-500);

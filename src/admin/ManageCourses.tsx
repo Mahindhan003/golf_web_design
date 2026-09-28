@@ -7,7 +7,7 @@ import { Button, SearchInput, EmptyState } from '../components'
 import { useApp } from '../app-context'
 import { navigate } from '../router'
 import { CourseForm } from './forms'
-import { IconPlus, IconPencil, IconTrash } from './AdminShell'
+import { IconPlus, IconPencil, IconTrash, NoAccess, Can } from './AdminShell'
 import { BackLink } from '../screens/TournamentDetails'
 
 export function useConfirmDeleteCourse() {
@@ -42,6 +42,7 @@ export function useConfirmDeleteCourse() {
 
 export function AdminCourses() {
   useDataVersion()
+  const { can } = useApp()
   const confirmDelete = useConfirmDeleteCourse()
   const [search, setSearch] = useState('')
   const q = search.trim().toLowerCase()
@@ -52,7 +53,7 @@ export function AdminCourses() {
       <PageHeader
         eyebrow="Admin console"
         title="Courses"
-        actions={<Button onClick={() => navigate('/admin/courses/new')}><IconPlus /> New course</Button>}
+        actions={<Can perm="courses.create"><Button onClick={() => navigate('/admin/courses/new')}><IconPlus /> New course</Button></Can>}
       />
 
       <div className="max-w-[440px] mb-5"><SearchInput value={search} onChange={setSearch} placeholder="Search courses…" /></div>
@@ -62,7 +63,7 @@ export function AdminCourses() {
           <EmptyState
             title={MOCK_COURSES.length ? 'No matching courses' : 'No courses yet'}
             subtitle={MOCK_COURSES.length ? 'Try a different search.' : 'Add a course before creating tournaments.'}
-            action={MOCK_COURSES.length ? { label: 'Clear search', onClick: () => setSearch('') } : { label: 'New course', onClick: () => navigate('/admin/courses/new') }}
+            action={MOCK_COURSES.length ? { label: 'Clear search', onClick: () => setSearch('') } : can('courses.create') ? { label: 'New course', onClick: () => navigate('/admin/courses/new') } : undefined}
           />
         </div>
       ) : (
@@ -90,10 +91,10 @@ export function AdminCourses() {
                   </div>
                   <div className="flex gap-2 mt-4">
                     <a href={`#/admin/courses/${c.id}`} className="flex-1 h-10 rounded-full bg-ink text-white text-[13px] font-bold font-display flex items-center justify-center gap-2 hover:bg-pine-900">
-                      <IconPencil /> Edit
+                      {can('courses.edit') ? <><IconPencil /> Edit</> : 'View'}
                     </a>
-                    <button onClick={() => confirmDelete(c)} aria-label={`Delete ${c.name}`} title="Delete"
-                      className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-100"><IconTrash /></button>
+                    {can('courses.delete') && <button onClick={() => confirmDelete(c)} aria-label={`Delete ${c.name}`} title="Delete"
+                      className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-100"><IconTrash /></button>}
                   </div>
                 </div>
               </article>
@@ -109,7 +110,7 @@ export function AdminCourses() {
 
 export function AdminCourseEditor({ id }: { id: string | null }) {
   useDataVersion()
-  const { showToast } = useApp()
+  const { showToast, can } = useApp()
   const confirmDelete = useConfirmDeleteCourse()
   const existing = id ? MOCK_COURSES.find(c => c.id === id) : undefined
 
@@ -124,14 +125,17 @@ export function AdminCourseEditor({ id }: { id: string | null }) {
 
   const isNew = !existing
   const done = () => navigate('/admin/courses')
+  if (isNew && !can('courses.create')) return <NoAccess what="create courses" />
+  if (!can('courses.view')) return <NoAccess what="view courses" />
+  const readOnly = !isNew && !can('courses.edit')
 
   return (
     <div className="page-in max-w-[920px]">
       <BackLink label="Courses" onClick={done} />
       <PageHeader
-        eyebrow={isNew ? 'Create' : 'Edit'}
+        eyebrow={isNew ? 'Create' : readOnly ? 'View only' : 'Edit'}
         title={isNew ? 'New course' : existing.name}
-        actions={!isNew && (
+        actions={!isNew && can('courses.delete') && (
           <button onClick={() => confirmDelete(existing, done)}
             className="h-11 px-4 rounded-full bg-rose-50 text-rose-600 text-[14px] font-bold font-display flex items-center gap-2 hover:bg-rose-100">
             <IconTrash /> Delete
@@ -143,6 +147,8 @@ export function AdminCourseEditor({ id }: { id: string | null }) {
         key={existing?.id ?? 'new'}
         formId="course-form"
         initial={existing}
+        readOnly={readOnly}
+        scorecardLocked={!can('courses.scorecard')}
         onSave={c => {
           upsertCourse(c)
           showToast(isNew ? `"${c.name}" added` : 'Course saved')
@@ -150,6 +156,9 @@ export function AdminCourseEditor({ id }: { id: string | null }) {
         }}
       />
 
+      {readOnly ? (
+        <p className="mt-6 text-[13px] text-gray-500">Your role can view this course but not change it.</p>
+      ) : (
       <div className="sticky bottom-4 mt-8 z-10">
         <div className="bg-ink rounded-full shadow-float p-2 pl-6 flex items-center gap-3">
           <p className="flex-1 text-[13px] font-medium text-white/60 truncate">
@@ -161,6 +170,7 @@ export function AdminCourseEditor({ id }: { id: string | null }) {
           </Button>
         </div>
       </div>
+      )}
     </div>
   )
 }

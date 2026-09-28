@@ -91,9 +91,11 @@ interface TournamentFormProps {
   formId: string
   initial?: Tournament
   onSave: (t: Tournament) => void
+  /** View-only: every field is disabled */
+  readOnly?: boolean
 }
 
-export function TournamentForm({ formId, initial, onSave }: TournamentFormProps) {
+export function TournamentForm({ formId, initial, onSave, readOnly }: TournamentFormProps) {
   const [name, setName]           = useState(initial?.name ?? '')
   const [category, setCategory]   = useState(initial?.category ?? '')
   const [format, setFormat]       = useState<string>(initial?.format ?? '')
@@ -167,7 +169,9 @@ export function TournamentForm({ formId, initial, onSave }: TournamentFormProps)
   }
 
   return (
-    <form id={formId} onSubmit={submit} noValidate className="@container space-y-4 @md:space-y-5">
+    <form id={formId} onSubmit={submit} noValidate className="@container">
+      {/* A disabled fieldset disables every input and button inside it */}
+      <fieldset disabled={readOnly} className="space-y-4 @md:space-y-5 min-w-0">
       <FormSection title="Basics">
         <Input label="Tournament name" placeholder="e.g. Autumn Stableford Cup" value={name}
           onChange={e => { setName(e.target.value); clear('name') }} error={errors.name} />
@@ -223,6 +227,7 @@ export function TournamentForm({ formId, initial, onSave }: TournamentFormProps)
       <FormSection title="Photo">
         <PhotoPicker value={imageUrl} onChange={v => { setImageUrl(v); clear('imageUrl') }} error={errors.imageUrl} />
       </FormSection>
+      </fieldset>
     </form>
   )
 }
@@ -235,9 +240,13 @@ interface CourseFormProps {
   formId: string
   initial?: Course
   onSave: (c: Course) => void
+  /** View-only: every field is disabled */
+  readOnly?: boolean
+  /** Scorecard can be seen but not changed (no "Edit scorecard" permission) */
+  scorecardLocked?: boolean
 }
 
-export function CourseForm({ formId, initial, onSave }: CourseFormProps) {
+export function CourseForm({ formId, initial, onSave, readOnly, scorecardLocked }: CourseFormProps) {
   const [name, setName]           = useState(initial?.name ?? '')
   const [designer, setDesigner]   = useState(initial?.designer ?? '')
   const [established, setEst]     = useState(initial?.established ?? '')
@@ -319,7 +328,8 @@ export function CourseForm({ formId, initial, onSave }: CourseFormProps) {
   const cellInput = 'w-full h-9 rounded-lg bg-canvas text-center text-[13px] font-semibold text-ink border border-transparent focus:bg-white focus:border-pine-400 focus:outline-none'
 
   return (
-    <form id={formId} onSubmit={submit} noValidate className="@container space-y-4 @md:space-y-5">
+    <form id={formId} onSubmit={submit} noValidate className="@container">
+      <fieldset disabled={readOnly} className="space-y-4 @md:space-y-5 min-w-0">
       <FormSection title="Course details">
         <Input label="Course name" placeholder="e.g. Pine Valley Golf Club" value={name}
           onChange={e => { setName(e.target.value); clear('name') }} error={errors.name} />
@@ -351,7 +361,8 @@ export function CourseForm({ formId, initial, onSave }: CourseFormProps) {
         </div>
       </FormSection>
 
-      <FormSection title="Scorecard" subtitle="Par and yardage total up automatically">
+      <FormSection title="Scorecard" subtitle={scorecardLocked && !readOnly ? "View only — your role can't edit scorecards" : "Par and yardage total up automatically"}>
+        <fieldset disabled={scorecardLocked} className="space-y-4 min-w-0">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex bg-canvas rounded-full p-1">
             {([18, 9] as const).map(n => (
@@ -391,11 +402,13 @@ export function CourseForm({ formId, initial, onSave }: CourseFormProps) {
           ))}
         </div>
         {errors.holes && <p className="text-xs text-red-500 font-medium">{errors.holes}</p>}
+        </fieldset>
       </FormSection>
 
       <FormSection title="Photo">
         <PhotoPicker value={imageUrl} onChange={v => { setImageUrl(v); clear('imageUrl') }} error={errors.imageUrl} />
       </FormSection>
+      </fieldset>
     </form>
   )
 }

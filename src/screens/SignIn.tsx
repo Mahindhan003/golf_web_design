@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Button, Input, PasswordInput } from '../components'
 import { AuthLayout } from '../shell'
 import { useApp } from '../app-context'
-import { isAdminLogin } from '../store'
+import { authenticate } from '../admin/access'
 
 type SignInState = 'idle' | 'loading' | 'error' | 'server-error'
 
@@ -33,8 +33,9 @@ export default function SignIn() {
       if (password === 'serverdown') return setState('server-error')
       if (password === 'wrongpass') return setState('error')
       setState('idle')
-      // The hard-coded admin account can also sign in here
-      if (isAdminLogin(email, password)) signInAdmin()
+      // Admin console logins can also sign in here
+      const admin = authenticate(email, password)
+      if (admin.ok) signInAdmin(admin.user.id)
       else signIn()
     }, 1400)
   }

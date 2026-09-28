@@ -2,6 +2,17 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import type { DialogData, NewAccount, ToastData } from './types'
 import { MOCK_PROFILE, applyNewAccount } from './data'
 import { navigate } from './router'
+import { getUser, getRole, rolePermissions, useAccessVersion, type AdminUser, type Role as AdminRole } from './admin/access'
+
+/** First admin page this set of permissions can open */
+export function adminHomePath(perms: string[]) {
+  if (perms.includes('dashboard.view')) return '/admin'
+  if (perms.includes('tournaments.view')) return '/admin/tournaments'
+  if (perms.includes('courses.view')) return '/admin/courses'
+  if (perms.includes('roles.view')) return '/admin/roles'
+  if (perms.includes('users.view')) return '/admin/users'
+  return '/admin'
+}
 
 export interface AccountBasics {
   fullName: string
@@ -15,6 +26,11 @@ interface AppState {
   isAuthenticated: boolean
   role: Role | null
   basics: AccountBasics | null
+  /** Signed-in admin login and its role (admin console only) */
+  adminUser: AdminUser | undefined
+  adminRole: AdminRole | undefined
+  /** Does the signed-in admin have this permission (e.g. "tournaments.edit")? */
+  can: (perm: string) => boolean
   toast: ToastData | null
   dialog: DialogData | null
   /** Bumped whenever profile data changes so pages re-read MOCK_PROFILE */
@@ -24,7 +40,7 @@ interface AppState {
   showDialog: (d: DialogData) => void
   closeDialog: () => void
   signIn: () => void
-  signInAdmin: () => void
+  signInAdmin: (userId: string) => void
   signOut: () => void
   startSetup: (b: AccountBasics) => void
   completeSetup: (a: NewAccount) => void
@@ -40,6 +56,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [toast, setToast]           = useState<ToastData | null>(null)
   const [dialog, setDialog]         = useState<DialogData | null>(null)
   const [profileVersion, setPV]     = useState(0)
+  const [adminUserId, setAdminUserId] = useState<string | null>(null)
+
+  // Re-derive permissions whenever roles or users change (e.g. an admin edits their own role)
+  const accessVersion = useAccessVersion()
+  const adminUser = role === 'admin' && adminUserId ? getUser(adminUserId) : undefined
+  const adminRole = adminUser ? getRole(adminUser.roleId) : undefined
+  const perms = useMemo(
+    () => new Set(adminUser?.active ? rolePermissions(adminUser.roleId) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [adminUser?.id, adminUser?.roleId, adminUser?.active, accessVersion],
+  )
+  const can = useCallback((perm: string) => perms.has(perm), [perms])
 
   const showToast = useCallback((message: string, type: ToastData['type'] = 'success') => {
     setToast({ id: Date.now().toString(), message, type })
@@ -55,10 +83,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast(`Welcome back, ${MOCK_PROFILE.firstName}`)
   }, [showToast])
 
-  const signInAdmin = useCallback(() => {
+  const signInAdmin = useCallback((userId: string) => {
+    setAdminUserId(userId)
     setRole('admin')
-    navigate('/admin', { replace: true })
-    showToast('Signed in to the admin console')
+    const user = getUser(userId)
+    navigate(adminHomePath(user ? rolePermissions(user.roleId) : []), { replace: true })
+    showToast(`Welcome, ${user?.name ?? 'admin'}`)
   }, [showToast])
 
   const signOut = useCallback(() => {
@@ -70,6 +100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       destructive: true,
       onConfirm: () => {
         setRole(null)
+        setAdminUserId(null)
         navigate(role === 'admin' ? '/admin/login' : '/signin', { replace: true })
         showToast('Signed out successfully', 'info')
       },
@@ -91,10 +122,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [showToast])
 
   const value = useMemo<AppState>(() => ({
-    isAuthenticated, role, basics, toast, dialog, profileVersion,
+    isAuthenticated, role, basics, adminUser, adminRole, can, toast, dialog, profileVersion,
     showToast, dismissToast, showDialog, closeDialog,
     signIn, signInAdmin, signOut, startSetup, completeSetup, touchProfile,
-  }), [isAuthenticated, role, basics, toast, dialog, profileVersion,
+  }), [isAuthenticated, role, basics, adminUser, adminRole, can, toast, dialog, profileVersion,
        showToast, dismissToast, showDialog, closeDialog,
        signIn, signInAdmin, signOut, startSetup, completeSetup, touchProfile])
 
