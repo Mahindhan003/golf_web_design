@@ -15,7 +15,6 @@ export type Route =
   | { name: 'course'; id: string }
   | { name: 'profile' }
   | { name: 'edit-profile' }
-  | { name: 'admin-login' }
   | { name: 'admin' }
   | { name: 'admin-tournaments' }
   | { name: 'admin-tournament-edit'; id: string | null }
@@ -34,7 +33,8 @@ export function parseHash(hash: string): Route {
   const [a, b, c] = parts
   if (a === 'admin') {
     if (!b) return { name: 'admin' }
-    if (b === 'login') return { name: 'admin-login' }
+    // Old admin sign-in links land on the single sign-in page
+    if (b === 'login') return { name: 'signin' }
     if (b === 'tournaments' && !c) return { name: 'admin-tournaments' }
     if (b === 'tournaments' && c) return { name: 'admin-tournament-edit', id: c === 'new' ? null : c }
     if (b === 'courses' && !c) return { name: 'admin-courses' }

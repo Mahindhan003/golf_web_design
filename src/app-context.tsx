@@ -115,11 +115,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       onConfirm: () => {
         setRole(null)
         setAdminUserId(null)
-        navigate(role === 'admin' ? '/admin/login' : '/signin', { replace: true })
+        navigate('/signin', { replace: true })
         showToast('Signed out successfully', 'info')
       },
     })
-  }, [showToast, role])
+  }, [showToast])
 
   const startSetup = useCallback((b: AccountBasics) => {
     setBasics(b)

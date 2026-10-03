@@ -10,14 +10,22 @@ npx pnpm@9 install   # first time only
 npx vite             # http://localhost:5180
 ```
 
-Sign in with any email and a password of 4+ characters (`wrongpass` / `serverdown` show the error states),
-or use **Sign up** to go through account creation and the 3-step golfer profile setup.
+There is **one sign-in page** (`#/signin`) for golfers, organisers and platform staff. The account's role
+decides where you land after signing in: platform staff and organisers open the admin console, golfers open the
+golfer home. (`#/admin/login` still works and opens the same page.)
+
+- **Golfer:** any other email with any password (`wrongpass` / `serverdown` show the error states)
+- **Platform admin:** `admin@gmail.com` / `admin` (more staff logins in `src/admin/access.ts`)
+- **Organiser:** `owner@savannahgolf.com` / `savannah` (approved) or `hello@coastalcharity.org` / `coastal` (pending review)
+
+Or use **Sign up** to go through account creation and the golfer profile or organisation setup.
 
 ## Pages
 
 | URL | Page |
 |---|---|
-| `#/signin`, `#/signup`, `#/setup` | Sign in, sign up, golfer profile setup |
+| `#/signin` | Single sign-in for golfers, organisers and admins (routes by role) |
+| `#/signup`, `#/setup`, `#/organizer-setup` | Sign up, golfer profile setup, organisation setup |
 | `#/home` | Dashboard |
 | `#/tournaments` | Tournament grid with search and filters |
 | `#/tournaments/:id` | Tournament details |

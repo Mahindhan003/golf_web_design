@@ -18,7 +18,7 @@ export default function SignIn() {
   const [accountMsg, setAccountMsg] = useState('')
 
   const validateEmail = (v: string) => (!v ? 'Email is required' : !EMAIL_RE.test(v) ? 'Enter a valid email address' : '')
-  const validatePw    = (v: string) => (!v ? 'Password is required' : v.length < 4 ? 'Password must be at least 4 characters' : '')
+  const validatePw    = (v: string) => (!v ? 'Password is required' : '')
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -29,12 +29,13 @@ export default function SignIn() {
     if (ev || pv) return
 
     setState('loading')
-    // Simulated API call — "wrongpass" / "serverdown" demo the error states
+    // Simulated API call — "wrongpass" / "serverdown" demo the error states.
+    // One sign-in for every account: the login response carries the role, which decides where the user lands.
     setTimeout(() => {
       if (password === 'serverdown') return setState('server-error')
       if (password === 'wrongpass') return setState('error')
       setState('idle')
-      // Admin console and organiser logins can also sign in here
+      // Platform admins and organisers → admin console; everyone else → golfer home
       const admin = authenticate(email, password)
       if (admin.ok) return signInAdmin(admin.user.id)
       if (admin.reason !== 'invalid') {
@@ -122,10 +123,6 @@ export default function SignIn() {
         </a>
       </p>
 
-      <p className="text-center text-[13px] text-gray-500 mt-3">
-        Organiser?{' '}
-        <a href="#/admin/login" className="text-ink font-semibold font-display hover:underline underline-offset-4">Admin sign in</a>
-      </p>
 
       <p className="text-center text-[11px] leading-relaxed text-gray-400 mt-10">
         By signing in, you agree to our<br />

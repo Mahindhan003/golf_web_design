@@ -15,7 +15,7 @@ import TournamentDetails from './screens/TournamentDetails'
 import CourseDetails from './screens/CourseDetails'
 import Profile from './screens/Profile'
 import EditProfile from './screens/EditProfile'
-import { AdminLogin, AdminLayout, NoAccess } from './admin/AdminShell'
+import { AdminLayout, NoAccess } from './admin/AdminShell'
 import { AdminRoles, AdminRoleEditor } from './admin/ManageRoles'
 import { AdminUsers } from './admin/ManageUsers'
 import { AdminOrganisation, AdminOrganizers } from './admin/Organizations'
@@ -23,8 +23,8 @@ import AdminDashboard from './admin/Dashboard'
 import { AdminTournaments, AdminTournamentEditor } from './admin/ManageTournaments'
 import { AdminCourses, AdminCourseEditor } from './admin/ManageCourses'
 
-const AUTH_ROUTES: Route['name'][] = ['signin', 'signup', 'setup', 'organizer-setup', 'admin-login']
-const isAdminRoute = (r: Route) => r.name.startsWith('admin') && r.name !== 'admin-login'
+const AUTH_ROUTES: Route['name'][] = ['signin', 'signup', 'setup', 'organizer-setup']
+const isAdminRoute = (r: Route) => r.name.startsWith('admin')
 
 function NotFound({ home }: { home: string }) {
   return (
@@ -42,7 +42,8 @@ function Routes() {
 
   // Guards: signed-out users only see sign-in pages; each role stays in its own area
   useEffect(() => {
-    if (!role && !isAuthRoute) navigate(isAdminRoute(route) ? '/admin/login' : '/signin', { replace: true })
+    // One sign-in page for golfers, organisers and admins; the account's role decides where it lands
+    if (!role && !isAuthRoute) navigate('/signin', { replace: true })
     else if (role === 'golfer' && (isAuthRoute || isAdminRoute(route))) navigate('/home', { replace: true })
     else if (role === 'admin' && (isAuthRoute || !isAdminRoute(route))) navigate(adminHomePath(ALL_PERMISSIONS.filter(can)), { replace: true })
   }, [role, isAuthRoute, route, can])
@@ -51,7 +52,6 @@ function Routes() {
     if (route.name === 'signup') return <SignUp />
     if (route.name === 'setup') return <ProfileSetup />
     if (route.name === 'organizer-setup') return <OrganizerSetup />
-    if (route.name === 'admin-login' || isAdminRoute(route)) return <AdminLogin />
     return <SignIn />
   }
 

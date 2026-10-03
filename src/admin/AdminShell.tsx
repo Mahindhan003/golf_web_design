@@ -1,10 +1,10 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import type { Route } from '../router'
 import { useApp } from '../app-context'
-import { AuthLayout, Wordmark } from '../shell'
-import { Button, Input, PasswordInput, IconSignOut } from '../components'
+import { Wordmark } from '../shell'
+import { Button, IconSignOut } from '../components'
 import { resetDemoData } from '../store'
-import { authenticate, authFailureMessage, resetAccessData, type OrgStatus } from './access'
+import { resetAccessData, type OrgStatus } from './access'
 import { navigate } from '../router'
 
 /* ───────── Icons (currentColor so the nav can tint them) ───────── */
@@ -98,72 +98,6 @@ export function IconTrash() {
     <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
       <path d="M3 5h12M7 5V3.5h4V5M5 5l.7 10a1 1 0 001 1h4.6a1 1 0 001-1L13 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
-  )
-}
-
-/* ───────── Admin sign-in ───────── */
-
-export function AdminLogin() {
-  const { signInAdmin } = useApp()
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError]       = useState('')
-  const [loading, setLoading]   = useState(false)
-
-  function submit(e: FormEvent) {
-    e.preventDefault()
-    if (!email.trim() || !password) { setError('Enter the admin email and password'); return }
-    setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      const r = authenticate(email, password)
-      if (r.ok) signInAdmin(r.user.id)
-      else setError(r.reason === 'invalid' ? 'Invalid admin credentials' : authFailureMessage(r))
-    }, 900)
-  }
-
-  return (
-    <AuthLayout
-      headline={<>Run your<br /><span className="text-lime-400">tournaments.</span></>}
-      sub="The admin console for organisers — create events, manage courses and keep registrations on track."
-    >
-      <span className="inline-flex items-center gap-2 h-8 px-3 rounded-full bg-ink text-lime-400 text-[12px] font-bold font-display">
-        <span className="w-1.5 h-1.5 rounded-full bg-lime-400" /> Admin console
-      </span>
-      <h2 className="font-display font-extrabold text-ink text-[32px] tracking-tight mt-4">Admin sign in</h2>
-      <p className="text-gray-500 text-[15px] mt-1">For platform staff, organisers and their teams</p>
-
-      {error && (
-        <div role="alert" className="mt-6 flex items-center gap-3 bg-rose-50 rounded-2xl px-4 py-3.5 fade-in">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="flex-shrink-0">
-            <circle cx="9" cy="9" r="8" stroke="#dc2626" strokeWidth="1.3" fill="#fef2f2"/>
-            <path d="M6 6l6 6M12 6l-6 6" stroke="#dc2626" strokeWidth="1.4" strokeLinecap="round"/>
-          </svg>
-          <p className="text-sm font-semibold text-rose-700 font-display">{error}</p>
-        </div>
-      )}
-
-      <form onSubmit={submit} noValidate className="flex flex-col gap-4 mt-8">
-        <Input label="Admin email" type="email" placeholder="admin@gmail.com" value={email}
-          onChange={e => { setEmail(e.target.value); setError('') }} autoComplete="username" onCanvas />
-        <PasswordInput label="Password" placeholder="Enter admin password" value={password}
-          onChange={e => { setPassword(e.target.value); setError('') }} autoComplete="current-password" onCanvas />
-        <Button type="submit" fullWidth size="lg" loading={loading} className="mt-2">
-          {loading ? 'Signing in…' : 'Sign in to admin'}
-        </Button>
-      </form>
-
-      <p className="text-center text-sm text-gray-500 mt-7">
-        New organiser?{' '}
-        <a href="#/signup" className="text-ink font-semibold font-display underline underline-offset-4 decoration-lime-500 decoration-2 hover:opacity-70">
-          Register your organisation
-        </a>
-      </p>
-      <p className="text-center text-sm text-gray-500 mt-2">
-        Playing, not organising?{' '}
-        <a href="#/signin" className="text-ink font-semibold font-display hover:underline underline-offset-4">Golfer sign in</a>
-      </p>
-    </AuthLayout>
   )
 }
 
