@@ -5,12 +5,13 @@ import { publicTournaments } from '../admin/access'
 import { PageHeader, useFakeLoad } from '../shell'
 import { navigate } from '../router'
 
-type Filter = 'All' | 'Open' | 'Upcoming' | 'Completed' | 'Cancelled'
+type Filter = 'All' | 'Live' | 'Open' | 'Upcoming' | 'Completed' | 'Cancelled'
 
-const FILTERS: Filter[] = ['All', 'Open', 'Upcoming', 'Completed', 'Cancelled']
+const FILTERS: Filter[] = ['All', 'Live', 'Open', 'Upcoming', 'Completed', 'Cancelled']
 
 const FILTER_STATUS: Record<Filter, TournamentStatus[]> = {
   All:       [],
+  Live:      ['in-progress'],
   Open:      ['registration-open'],
   Upcoming:  ['upcoming', 'published'],
   Completed: ['completed'],

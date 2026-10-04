@@ -6,6 +6,7 @@ import { publicTournaments } from '../admin/access'
 import { PageHeader, useFakeLoad } from '../shell'
 import { useApp } from '../app-context'
 import { navigate } from '../router'
+import { myEntry, useLiveVersion } from '../live'
 
 function daysUntil(date: string) {
   const ms = new Date(`${date}T00:00:00`).getTime() - new Date().setHours(0, 0, 0, 0)
@@ -15,12 +16,16 @@ function daysUntil(date: string) {
 export default function Home() {
   const { showToast, profileVersion } = useApp()
   void profileVersion
+  useLiveVersion()
   const loading = useFakeLoad(700)
   const p = MOCK_PROFILE
 
   // Golfers never see drafts or events from organisers awaiting approval
   const MOCK_TOURNAMENTS = publicTournaments()
-  const registered = MOCK_TOURNAMENTS.find(t => t.registrationStatus === 'registered')
+  // A live round you're playing beats any other upcoming registration
+  const mine = MOCK_TOURNAMENTS.filter(t => myEntry(t.id)?.status === 'registered' && !['completed', 'cancelled'].includes(t.status))
+  const playingNow = mine.find(t => t.status === 'in-progress')
+  const registered = playingNow ?? mine.sort((a, b) => a.startDate.localeCompare(b.startDate))[0]
   const open = MOCK_TOURNAMENTS.filter(t => t.registrationStatus === 'open')
   const upcoming = MOCK_TOURNAMENTS.filter(t => ['upcoming', 'published'].includes(t.status) && !open.includes(t))
   const forYou = [...open, ...upcoming].slice(0, 3)
@@ -76,17 +81,17 @@ export default function Home() {
         <div className="lg:col-span-7">
           {registered ? (
             <a
-              href={`#/tournaments/${registered.id}`}
+              href={playingNow ? `#/tournaments/${registered.id}/play` : `#/tournaments/${registered.id}`}
               className="group relative block h-[340px] rounded-[32px] overflow-hidden shadow-card"
             >
               <img src={registered.imageUrl} alt={registered.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />
               <div className="absolute inset-0 scrim-bottom" />
               <div className="absolute top-5 left-5 right-5 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="glass-dark h-7 px-3 rounded-full text-[12px] font-bold font-display text-white inline-flex items-center">Up next</span>
-                  <StatusBadge status="registered" size="md" />
+                  <span className="glass-dark h-7 px-3 rounded-full text-[12px] font-bold font-display text-white inline-flex items-center">{playingNow ? 'Playing now' : 'Up next'}</span>
+                  <StatusBadge status={playingNow ? 'in-progress' : 'registered'} size="md" />
                 </div>
-                {days > 0 && <GlassChip>{days === 1 ? 'Tomorrow' : `In ${days} days`}</GlassChip>}
+                {playingNow ? <GlassChip>Enter scores →</GlassChip> : days > 0 && <GlassChip>{days === 1 ? 'Tomorrow' : `In ${days} days`}</GlassChip>}
               </div>
               <div className="absolute bottom-6 left-6 right-6 flex items-end gap-4">
                 <div className="flex-1 min-w-0">

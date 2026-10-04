@@ -13,6 +13,8 @@ import Home from './screens/Home'
 import TournamentList from './screens/TournamentList'
 import TournamentDetails from './screens/TournamentDetails'
 import CourseDetails from './screens/CourseDetails'
+import Leaderboard from './screens/Leaderboard'
+import LivePlay from './screens/LivePlay'
 import Profile from './screens/Profile'
 import EditProfile from './screens/EditProfile'
 import { AdminLayout, NoAccess } from './admin/AdminShell'
@@ -21,6 +23,7 @@ import { AdminUsers } from './admin/ManageUsers'
 import { AdminOrganisation, AdminOrganizers } from './admin/Organizations'
 import AdminDashboard from './admin/Dashboard'
 import { AdminTournaments, AdminTournamentEditor } from './admin/ManageTournaments'
+import { AdminTournamentLive } from './admin/LiveControl'
 import { AdminCourses, AdminCourseEditor } from './admin/ManageCourses'
 
 const AUTH_ROUTES: Route['name'][] = ['signin', 'signup', 'setup', 'organizer-setup']
@@ -64,6 +67,7 @@ function Routes() {
         case 'admin':                 return can('dashboard.view') ? <AdminDashboard key={key} /> : <NoAccess what="view the dashboard" />
         case 'admin-tournaments':     return can('tournaments.view') ? <AdminTournaments key={key} /> : <NoAccess what="view tournaments" />
         case 'admin-tournament-edit': return <AdminTournamentEditor key={key} id={route.id} />
+        case 'admin-tournament-live': return <AdminTournamentLive key={key} id={route.id} />
         case 'admin-courses':         return can('courses.view') ? <AdminCourses key={key} /> : <NoAccess what="view courses" />
         case 'admin-course-edit':     return <AdminCourseEditor key={key} id={route.id} />
         case 'admin-roles':           return <AdminRoles key={key} />
@@ -83,6 +87,8 @@ function Routes() {
       case 'home':         return <Home key={key} />
       case 'tournaments':  return <TournamentList key={key} />
       case 'tournament':   return <TournamentDetails key={key} id={route.id} />
+      case 'leaderboard':  return <Leaderboard key={key} id={route.id} />
+      case 'play':         return <LivePlay key={key} id={route.id} />
       case 'course':       return <CourseDetails key={key} id={route.id} />
       case 'profile':      return <Profile key={key} />
       case 'edit-profile': return <EditProfile key={key} />

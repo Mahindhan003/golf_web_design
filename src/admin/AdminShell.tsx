@@ -4,6 +4,7 @@ import { useApp } from '../app-context'
 import { Wordmark } from '../shell'
 import { Button, IconSignOut } from '../components'
 import { resetDemoData } from '../store'
+import { resetLiveData } from '../live'
 import { resetAccessData, type OrgStatus } from './access'
 import { navigate } from '../router'
 
@@ -105,7 +106,7 @@ export function IconTrash() {
 
 const NAV = [
   { label: 'Dashboard',   href: '#/admin',             Icon: IconDashboard, match: ['admin'] },
-  { label: 'Tournaments', href: '#/admin/tournaments', Icon: IconTrophy,    match: ['admin-tournaments', 'admin-tournament-edit'] },
+  { label: 'Tournaments', href: '#/admin/tournaments', Icon: IconTrophy,    match: ['admin-tournaments', 'admin-tournament-edit', 'admin-tournament-live'] },
   { label: 'Courses',     href: '#/admin/courses',     Icon: IconFlag,      match: ['admin-courses', 'admin-course-edit'] },
   { label: 'Organisation', href: '#/admin/organisation', Icon: IconBuilding, match: ['admin-organisation'] },
   { label: 'Organizers',  href: '#/admin/organizers',  Icon: IconBuilding,  match: ['admin-organizers'] },
@@ -147,7 +148,7 @@ function useResetDemo() {
     message: 'This restores the original tournaments, courses, organisers, roles and admin users, and removes every change made in the admin console on this device.',
     confirmLabel: 'Reset data',
     destructive: true,
-    onConfirm: () => { resetDemoData(); resetAccessData(); showToast('Demo data restored', 'info') },
+    onConfirm: () => { resetDemoData(); resetAccessData(); resetLiveData(); showToast('Demo data restored', 'info') },
   })
 }
 

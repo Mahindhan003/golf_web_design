@@ -1,10 +1,13 @@
-import type { HoleData } from '../types'
+import { useState } from 'react'
+import type { Course, HoleData } from '../types'
 import { TournamentCard, InfoRow, EmptyState, IconPin } from '../components'
 import { getCourse, getTournamentsByCourse } from '../data'
 import { isPublicTournament } from '../admin/access'
 import { navigate } from '../router'
 import { useFakeLoad } from '../shell'
 import { BackLink } from './TournamentDetails'
+import { HoleMapView } from '../hole-map'
+import { dist, generateHoleMap, teeSwatch, teeTotal } from '../golf'
 
 function NineTable({ label, holes, totalLabel }: { label: string; holes: HoleData[]; totalLabel: string }) {
   const par = holes.reduce((s, h) => s + h.par, 0)
@@ -41,6 +44,68 @@ function NineTable({ label, holes, totalLabel }: { label: string; holes: HoleDat
         </table>
       </div>
     </div>
+  )
+}
+
+function TeesTable({ course }: { course: Course }) {
+  const tees = course.teeSets ?? []
+  if (!tees.length) return null
+  const rating = (r?: number, s?: number) => (r !== undefined ? `${r.toFixed(1)} / ${s}` : '—')
+  return (
+    <section className="bg-white rounded-[28px] shadow-card p-6 lg:p-7">
+      <h2 className="font-display font-bold text-ink text-[19px] tracking-tight mb-4">Tees</h2>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-[14px]">
+          <thead>
+            <tr className="text-[12px] font-bold font-display text-gray-400">
+              <th className="py-2 pr-3">Tees</th><th className="py-2 px-3 text-right">Yards</th>
+              <th className="py-2 px-3 text-right">Men rating / slope</th><th className="py-2 pl-3 text-right">Women rating / slope</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-black/[0.05]">
+            {tees.map(t => (
+              <tr key={t.id}>
+                <td className="py-2.5 pr-3 font-semibold text-ink"><span className="inline-flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-full ring-1 ring-black/15" style={{ background: teeSwatch(t.color) }} />{t.name}</span></td>
+                <td className="py-2.5 px-3 text-right">{teeTotal(t).toLocaleString()}</td>
+                <td className="py-2.5 px-3 text-right">{rating(t.menRating, t.menSlope)}</td>
+                <td className="py-2.5 pl-3 text-right">{rating(t.womenRating, t.womenSlope)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+function HoleGuide({ course }: { course: Course }) {
+  const [index, setIndex] = useState(0)
+  const hole = course.holeData[index]
+  const map = hole.map ?? generateHoleMap(hole)
+  return (
+    <section className="bg-white rounded-[28px] shadow-card p-6 lg:p-7">
+      <h2 className="font-display font-bold text-ink text-[19px] tracking-tight mb-4">Hole guide</h2>
+      <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-2">
+        {course.holeData.map((h, i) => (
+          <button key={h.hole} onClick={() => setIndex(i)} aria-pressed={i === index}
+            className={`w-9 h-9 rounded-full text-[13px] font-bold font-display flex-shrink-0 ${i === index ? 'bg-ink text-white' : 'bg-canvas text-gray-600 hover:bg-gray-200'}`}>{h.hole}</button>
+        ))}
+      </div>
+      <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] gap-5 mt-3 items-start">
+        <HoleMapView map={map} size="md" ariaLabel={`Hole ${hole.hole} layout`} />
+        <div>
+          <p className="font-display font-extrabold text-ink text-[22px] tracking-tight">Hole {hole.hole}{hole.name ? ` · ${hole.name}` : ''}</p>
+          <p className="text-[14px] text-gray-500">Par {hole.par}{hole.parWomen && hole.parWomen !== hole.par ? ` (women ${hole.parWomen})` : ''} · Stroke index {hole.handicap}</p>
+          <ul className="mt-4 space-y-1.5 text-[14px]">
+            {(course.teeSets ?? []).map(t => (
+              <li key={t.id} className="flex justify-between"><span className="inline-flex items-center gap-2 text-gray-600"><span className="w-3 h-3 rounded-full ring-1 ring-black/15" style={{ background: teeSwatch(t.color) }} />{t.name}</span><span className="font-semibold text-ink">{t.yards[index]} yds</span></li>
+            ))}
+          </ul>
+          <p className="text-[13px] text-gray-500 mt-4">Green depth {dist(map.greenFront, map.greenBack)} yds · {map.hazards.filter(h => h.type === 'bunker').length} bunkers{map.hazards.some(h => h.type === 'water') ? ' · water in play' : ''}</p>
+          {hole.notes && <p className="text-[14px] text-gray-600 mt-3 leading-relaxed">{hole.notes}</p>}
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -113,6 +178,13 @@ export default function CourseDetails({ id }: { id: string }) {
         ))}
       </div>
 
+      {course.status && course.status !== 'open' && (
+        <div className={`mt-6 rounded-2xl px-5 py-4 ${course.status === 'closed' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-800'}`}>
+          <p className="text-sm font-bold font-display">{course.status === 'closed' ? 'Course closed' : 'Partly open / maintenance'}</p>
+          {course.statusNote && <p className="text-[13px] opacity-80 mt-0.5">{course.statusNote}</p>}
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-6 mt-6 items-start">
         <div className="space-y-6">
           <section className="bg-white rounded-[28px] shadow-card p-6 lg:p-7">
@@ -127,6 +199,9 @@ export default function CourseDetails({ id }: { id: string }) {
               {back.length > 0 && <NineTable label="Back 9" holes={back} totalLabel="IN" />}
             </div>
           </section>
+
+          <TeesTable course={course} />
+          <HoleGuide course={course} />
         </div>
 
         <aside className="lg:sticky lg:top-8 space-y-6">
@@ -141,7 +216,29 @@ export default function CourseDetails({ id }: { id: string }) {
               label="Designer"
               value={course.designer}
             />
+            {course.phone && <InfoRow icon={<span className="text-[14px]">☎</span>} label="Phone" value={course.phone} />}
+            {course.website && <InfoRow icon={<span className="text-[14px]">↗</span>} label="Website" value={course.website} />}
+            {course.dressCode && <InfoRow icon={<span className="text-[14px]">👕</span>} label="Dress code" value={course.dressCode} />}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {course.geo && (
+                <a href={`https://www.google.com/maps/dir/?api=1&destination=${course.geo.lat},${course.geo.lng}`} target="_blank" rel="noreferrer"
+                  className="h-10 px-4 rounded-full bg-ink text-white text-[13px] font-bold font-display inline-flex items-center">Directions ↗</a>
+              )}
+              {course.bookingUrl && (
+                <a href={course.bookingUrl.startsWith('http') ? course.bookingUrl : `https://${course.bookingUrl}`} target="_blank" rel="noreferrer"
+                  className="h-10 px-4 rounded-full bg-canvas text-ink text-[13px] font-bold font-display inline-flex items-center">Book a tee time ↗</a>
+              )}
+            </div>
           </section>
+
+          {!!course.facilities?.length && (
+            <section className="bg-white rounded-[28px] shadow-card p-6">
+              <h2 className="font-display font-bold text-ink text-[18px] tracking-tight mb-3">Facilities</h2>
+              <div className="flex flex-wrap gap-1.5">
+                {course.facilities.map(f => <span key={f} className="h-8 px-3 rounded-full bg-canvas text-[13px] font-semibold text-gray-600 inline-flex items-center">{f}</span>)}
+              </div>
+            </section>
+          )}
 
           {tournaments.length > 0 && (
             <section>

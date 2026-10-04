@@ -117,7 +117,7 @@ export default function AdminDashboard() {
           <section className="bg-white rounded-[28px] shadow-card p-6">
             <h2 className="font-display font-bold text-ink text-[17px] tracking-tight mb-3">By status</h2>
             <ul className="space-y-2">
-              {(['draft', 'registration-open', 'published', 'upcoming', 'registration-closed', 'completed', 'cancelled'] as const).map(s => {
+              {(['draft', 'registration-open', 'published', 'upcoming', 'registration-closed', 'in-progress', 'completed', 'cancelled'] as const).map(s => {
                 const n = MOCK_TOURNAMENTS.filter(t => t.status === s).length
                 return (
                   <li key={s} className="flex items-center justify-between text-[14px]">

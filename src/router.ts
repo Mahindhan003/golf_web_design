@@ -12,12 +12,15 @@ export type Route =
   | { name: 'home' }
   | { name: 'tournaments' }
   | { name: 'tournament'; id: string }
+  | { name: 'leaderboard'; id: string }
+  | { name: 'play'; id: string }
   | { name: 'course'; id: string }
   | { name: 'profile' }
   | { name: 'edit-profile' }
   | { name: 'admin' }
   | { name: 'admin-tournaments' }
   | { name: 'admin-tournament-edit'; id: string | null }
+  | { name: 'admin-tournament-live'; id: string }
   | { name: 'admin-courses' }
   | { name: 'admin-course-edit'; id: string | null }
   | { name: 'admin-roles' }
@@ -36,6 +39,7 @@ export function parseHash(hash: string): Route {
     // Old admin sign-in links land on the single sign-in page
     if (b === 'login') return { name: 'signin' }
     if (b === 'tournaments' && !c) return { name: 'admin-tournaments' }
+    if (b === 'tournaments' && c && parts[3] === 'live') return { name: 'admin-tournament-live', id: c }
     if (b === 'tournaments' && c) return { name: 'admin-tournament-edit', id: c === 'new' ? null : c }
     if (b === 'courses' && !c) return { name: 'admin-courses' }
     if (b === 'courses' && c) return { name: 'admin-course-edit', id: c === 'new' ? null : c }
@@ -53,6 +57,8 @@ export function parseHash(hash: string): Route {
   if (a === 'organizer-setup') return { name: 'organizer-setup' }
   if (a === 'tournaments' && !b) return { name: 'tournaments' }
   if (a === 'tournaments' && b && !c) return { name: 'tournament', id: b }
+  if (a === 'tournaments' && b && c === 'leaderboard') return { name: 'leaderboard', id: b }
+  if (a === 'tournaments' && b && c === 'play') return { name: 'play', id: b }
   if (a === 'courses' && b && !c) return { name: 'course', id: b }
   if (a === 'profile' && !b) return { name: 'profile' }
   if (a === 'profile' && b === 'edit') return { name: 'edit-profile' }

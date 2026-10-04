@@ -9,6 +9,7 @@ import { TournamentForm } from './forms'
 import { IconPlus, IconPencil, IconTrash, NoAccess, Can } from './AdminShell'
 import { BackLink } from '../screens/TournamentDetails'
 import { scopedTournaments, canPublish, organizerName, type AdminUser } from './access'
+import { entriesFor } from '../live'
 
 /** Statuses this admin may set: organisations under review can only keep events as drafts */
 function statusOptionsFor(actor?: AdminUser) {
@@ -20,6 +21,7 @@ const STATUS_TONE: Record<TournamentStatus, string> = {
   'registration-open':   'bg-emerald-50 text-emerald-700',
   'published':           'bg-amber-50 text-amber-700',
   'upcoming':            'bg-sky-50 text-sky-700',
+  'in-progress':         'bg-rose-500 text-white',
   'registration-closed': 'bg-rose-50 text-rose-700',
   'completed':           'bg-gray-100 text-gray-600',
   'cancelled':           'bg-rose-100 text-rose-800',
@@ -154,6 +156,12 @@ export function AdminTournaments() {
                       <td className="py-3.5 px-3"><StatusSelect t={t} /></td>
                       <td className="py-3.5 pl-3 pr-6">
                         <div className="flex justify-end gap-1.5">
+                          {['registration-closed', 'upcoming', 'in-progress', 'completed'].includes(t.status) && (
+                            <a href={`#/admin/tournaments/${t.id}/live`} aria-label={`Tournament day for ${t.name}`}
+                              className={`h-9 px-3.5 rounded-full text-[12px] font-bold font-display flex items-center ${t.status === 'in-progress' ? 'bg-rose-500 text-white hover:bg-rose-600' : 'bg-canvas text-ink hover:bg-gray-200'}`}>
+                              {t.status === 'in-progress' ? 'Live' : t.status === 'completed' ? 'Results' : 'Tee sheet'}
+                            </a>
+                          )}
                           {can('tournaments.edit') ? (
                             <a href={`#/admin/tournaments/${t.id}`} aria-label={`Edit ${t.name}`} title="Edit"
                               className="w-9 h-9 rounded-full bg-canvas text-ink flex items-center justify-center hover:bg-gray-200"><IconPencil /></a>
@@ -209,11 +217,16 @@ export function AdminTournamentEditor({ id }: { id: string | null }) {
       <PageHeader
         eyebrow={isNew ? 'Create' : readOnly ? 'View only' : 'Edit'}
         title={isNew ? 'New tournament' : existing.name}
-        actions={!isNew && can('tournaments.delete') && (
-          <button onClick={() => confirmDelete(existing, done)}
-            className="h-11 px-4 rounded-full bg-rose-50 text-rose-600 text-[14px] font-bold font-display flex items-center gap-2 hover:bg-rose-100">
-            <IconTrash /> Delete
-          </button>
+        actions={!isNew && (
+          <>
+            <Button variant="secondary" onClick={() => navigate(`/admin/tournaments/${existing.id}/live`)}>Tournament day</Button>
+            {can('tournaments.delete') && (
+              <button onClick={() => confirmDelete(existing, done)}
+                className="h-11 px-4 rounded-full bg-rose-50 text-rose-600 text-[14px] font-bold font-display flex items-center gap-2 hover:bg-rose-100">
+                <IconTrash /> Delete
+              </button>
+            )}
+          </>
         )}
       />
 
@@ -224,6 +237,7 @@ export function AdminTournamentEditor({ id }: { id: string | null }) {
         readOnly={readOnly}
         statusOptions={statusOptionsFor(adminUser)}
         statusNote={publishable ? undefined : 'Your organisation is under review, so tournaments stay as drafts until it’s approved.'}
+        registered={existing ? entriesFor(existing.id).filter(e => e.status === 'registered').length || existing.players : 0}
         onSave={t => {
           upsertTournament(isNew ? { ...t, organizerId: adminUser?.organizationId } : t)
           showToast(isNew ? `"${t.name}" created` : 'Tournament saved')

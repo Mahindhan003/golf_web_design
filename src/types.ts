@@ -35,6 +35,7 @@ export type TournamentStatus =
   | 'registration-open'
   | 'registration-closed'
   | 'upcoming'
+  | 'in-progress'
   | 'completed'
   | 'cancelled'
 
@@ -66,6 +67,108 @@ export interface Tournament {
   entryFee: string
   prize: string
   imageUrl: string
+
+  /* ── Full tournament set-up (optional so older saved data still loads) ── */
+  rounds?: TournamentRound[]
+  scoring?: ScoringRules
+  eligibility?: Eligibility
+  divisions?: Division[]
+  registration?: RegistrationWindow
+  fees?: TournamentFees
+  prizes?: Prize[]
+  teeSheet?: TeeSheetSettings
+  officials?: Official[]
+  contactEmail?: string
+  contactPhone?: string
+  localRules?: string
+  /** Final results are visible to golfers */
+  resultsPublished?: boolean
+}
+
+export interface TournamentRound {
+  number: number
+  date: string
+  /** Which holes the round is played over */
+  holes: 'all' | 'front' | 'back'
+}
+
+export type ScoringBasis = 'gross' | 'net' | 'gross-and-net'
+export type TieBreak = 'countback' | 'playoff' | 'shared'
+
+export interface ScoringRules {
+  basis: ScoringBasis
+  /** Handicap allowance applied to course handicap, e.g. 95 */
+  allowancePct: number
+  /** Highest handicap index accepted for net scoring */
+  maxHandicap: number
+  tieBreak: TieBreak
+  /** Cut after this round (0 = no cut) */
+  cutAfterRound: number
+  /** Number of players (and ties) who make the cut */
+  cutSize: number
+}
+
+export interface Eligibility {
+  minHandicap?: number
+  maxHandicap?: number
+  minAge?: number
+  maxAge?: number
+  gender: 'open' | 'men' | 'women'
+  membersOnly: boolean
+  officialHandicapRequired: boolean
+}
+
+export interface Division {
+  id: string
+  name: string
+  minHandicap: number
+  maxHandicap: number
+  /** Tee set (Course.teeSets[].id) this division plays from */
+  teeSetId: string
+}
+
+export interface RegistrationWindow {
+  /** ISO date-times (local) */
+  opensAt: string
+  closesAt: string
+  waitlist: boolean
+  withdrawBy: string
+  refundPolicy: string
+}
+
+export interface TournamentFees {
+  currency: string
+  /** Standard entry */
+  amount: number
+  memberAmount?: number
+  earlyBirdAmount?: number
+  earlyBirdUntil?: string
+  perTeam: boolean
+  includes: string[]
+}
+
+export interface Prize {
+  id: string
+  label: string
+  /** Division id, or empty for overall */
+  divisionId?: string
+  value: string
+}
+
+export interface TeeSheetSettings {
+  startType: 'tee-times' | 'shotgun'
+  /** "HH:MM" 24h */
+  firstTeeTime: string
+  intervalMinutes: number
+  groupSize: 2 | 3 | 4
+  /** Tee times off the 1st only, or the 1st and 10th */
+  startingTees: 'first' | 'first-and-tenth'
+}
+
+export interface Official {
+  name: string
+  role: string
+  phone: string
 }
 
 export interface HoleData {
@@ -73,7 +176,53 @@ export interface HoleData {
   par: number
   yards: number
   handicap: number
+  /** Women's par / stroke index when they differ from the men's */
+  parWomen?: number
+  handicapWomen?: number
+  name?: string
+  notes?: string
+  map?: HoleMap
 }
+
+/**
+ * Hole geometry in yards on a local grid: the tee sits at (0, 0) and +y points down the hole.
+ * The real backend stores latitude/longitude per point; the prototype uses yards so it can
+ * draw holes without map tiles. Distances are straight-line yards.
+ */
+export interface Point { x: number; y: number }
+
+export interface HoleHazard {
+  id: string
+  type: 'bunker' | 'water' | 'trees'
+  at: Point
+  /** Radius in yards */
+  size: number
+}
+
+export interface HoleMap {
+  tee: Point
+  /** Centre line from tee to green (dogleg points in between) */
+  path: Point[]
+  greenFront: Point
+  greenCentre: Point
+  greenBack: Point
+  hazards: HoleHazard[]
+}
+
+export interface TeeSet {
+  id: string
+  name: string
+  /** Tee marker colour (data, shown as a swatch) */
+  color: string
+  menRating?: number
+  menSlope?: number
+  womenRating?: number
+  womenSlope?: number
+  /** Yards per hole from these tees, in hole order */
+  yards: number[]
+}
+
+export type CourseStatus = 'open' | 'closed' | 'maintenance'
 
 export interface Course {
   id: string
@@ -96,6 +245,18 @@ export interface Course {
   holeData: HoleData[]
   /** Organisation that added it; undefined = platform-managed course */
   organizerId?: string
+
+  /* ── Full course details (optional so older saved data still loads) ── */
+  geo?: { lat: number; lng: number }
+  teeSets?: TeeSet[]
+  phone?: string
+  email?: string
+  website?: string
+  bookingUrl?: string
+  facilities?: string[]
+  dressCode?: string
+  status?: CourseStatus
+  statusNote?: string
 }
 
 export interface GolferProfile {

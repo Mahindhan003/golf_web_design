@@ -1,4 +1,5 @@
 import type { Tournament, Course, GolferProfile, NewAccount } from './types'
+import { withCourseDefaults, withTournamentDefaults } from './golf'
 
 export const MOCK_PROFILE: GolferProfile = {
   firstName: 'Alexander',
@@ -58,6 +59,10 @@ export function applyNewAccount(a: NewAccount) {
 export const MOCK_COURSES: Course[] = [
   {
     id: 'c1',
+    geo: { lat: 33.5021, lng: -82.0226 },
+    phone: '+1 (706) 555-0100',
+    website: 'augustapines.com',
+    dressCode: 'Collared shirts; no denim. Soft spikes only.',
     name: 'Augusta Pines Golf Club',
     imageUrl: 'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=800&h=500&fit=crop&auto=format',
     location: 'Augusta, Georgia, USA',
@@ -98,6 +103,10 @@ export const MOCK_COURSES: Course[] = [
   },
   {
     id: 'c2',
+    geo: { lat: 36.5674, lng: -121.9480 },
+    phone: '+1 (831) 555-0170',
+    website: 'coastallinks.com',
+    dressCode: 'Collared shirts; no denim. Soft spikes only.',
     name: 'Coastal Links at Carmel Bay',
     imageUrl: 'https://images.unsplash.com/photo-1592919505780-303950717480?w=800&h=500&fit=crop&auto=format',
     location: 'Carmel-by-the-Sea, California, USA',
@@ -129,6 +138,10 @@ export const MOCK_COURSES: Course[] = [
   },
   {
     id: 'c3',
+    geo: { lat: 35.0526, lng: -83.1968 },
+    phone: '+1 (828) 555-0130',
+    website: 'highlandsridge.com',
+    dressCode: 'Collared shirts; no denim. Soft spikes only.',
     name: 'Highlands Ridge Golf Resort',
     imageUrl: 'https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?w=800&h=500&fit=crop&auto=format',
     location: 'Highlands, North Carolina, USA',
@@ -332,7 +345,70 @@ export const MOCK_TOURNAMENTS: Tournament[] = [
     prize: 'Charity Cup',
     imageUrl: 'https://images.unsplash.com/photo-1592919505780-303950717480?w=800&h=500&fit=crop&auto=format',
   },
+  {
+    // Live now: round 1 under way — the golfer is in the field (live scoring, leaderboard, hole map)
+    id: 't8',
+    name: 'Augusta Pines Club Championship',
+    dateRange: 'Oct 4–5, 2026',
+    startDate: '2026-10-04',
+    endDate: '2026-10-05',
+    time: '7:30 AM tee times',
+    venue: 'Augusta Pines Golf Club',
+    location: 'Augusta, Georgia, USA',
+    city: 'Augusta, Georgia',
+    country: 'United States',
+    status: 'in-progress',
+    format: 'Stroke Play',
+    category: 'Club Championship',
+    description:
+      'The 36-hole club championship over two days. Gross champion takes the Hartwell Cup; net winners in each division receive pro-shop credit.',
+    courseId: 'c1',
+    registrationStatus: 'registered',
+    players: 16,
+    maxPlayers: 48,
+    entryFee: '$95',
+    prize: 'Hartwell Cup + $1,000 pro-shop credit',
+    imageUrl: 'https://images.unsplash.com/photo-1593111774240-d529f12cf4bb?w=800&h=500&fit=crop&auto=format',
+    rounds: [
+      { number: 1, date: '2026-10-04', holes: 'all' },
+      { number: 2, date: '2026-10-05', holes: 'all' },
+    ],
+    scoring: { basis: 'gross-and-net', allowancePct: 95, maxHandicap: 28, tieBreak: 'countback', cutAfterRound: 0, cutSize: 0 },
+    eligibility: { gender: 'open', membersOnly: true, officialHandicapRequired: true, maxHandicap: 28 },
+    divisions: [
+      { id: 'div-a', name: 'Championship (0–9.9)', minHandicap: -10, maxHandicap: 9.9, teeSetId: 'tee-black' },
+      { id: 'div-b', name: 'Division B (10–18.9)', minHandicap: 10, maxHandicap: 18.9, teeSetId: 'tee-blue' },
+      { id: 'div-c', name: 'Division C (19–28)', minHandicap: 19, maxHandicap: 28, teeSetId: 'tee-red' },
+    ],
+    registration: {
+      opensAt: '2026-09-01T09:00', closesAt: '2026-10-01T18:00', waitlist: true, withdrawBy: '2026-09-28T18:00',
+      refundPolicy: 'Full refund until Sep 28; no refund after the draw is published.',
+    },
+    fees: { currency: 'USD', amount: 95, memberAmount: 95, perTeam: false, includes: ['Green fee', 'Cart', 'Range balls', 'Dinner / prize giving'] },
+    prizes: [
+      { id: 'prz-1', label: 'Gross champion', value: 'Hartwell Cup + $1,000 pro-shop credit' },
+      { id: 'prz-2', label: 'Net winner', divisionId: 'div-b', value: '$300 pro-shop credit' },
+      { id: 'prz-3', label: 'Net winner', divisionId: 'div-c', value: '$300 pro-shop credit' },
+      { id: 'prz-4', label: 'Closest to the pin (16th)', value: 'Club driver' },
+    ],
+    teeSheet: { startType: 'tee-times', firstTeeTime: '07:30', intervalMinutes: 10, groupSize: 4, startingTees: 'first' },
+    officials: [
+      { name: 'Dana Whitfield', role: 'Tournament director', phone: '+1 (706) 555-0110' },
+      { name: 'Marcus Lee', role: 'Rules official', phone: '+1 (706) 555-0124' },
+    ],
+    contactEmail: 'events@augustapines.com',
+    contactPhone: '+1 (706) 555-0100',
+    localRules: [
+      'Preferred lies on closely mown areas through the green.',
+      'Red stakes on the 16th: drop zone available short of the water.',
+      'Pace of play: 4 h 15 min per round; groups out of position will be timed.',
+    ].join('\n'),
+  },
 ]
+
+// Fill structured set-up (tee sets, hole maps, rounds, scoring, fees…) for every seed record
+MOCK_COURSES.splice(0, MOCK_COURSES.length, ...MOCK_COURSES.map(withCourseDefaults))
+MOCK_TOURNAMENTS.splice(0, MOCK_TOURNAMENTS.length, ...MOCK_TOURNAMENTS.map(withTournamentDefaults))
 
 export function getCourse(id: string): Course | undefined {
   return MOCK_COURSES.find(c => c.id === id)

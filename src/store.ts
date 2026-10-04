@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { Course, HoleData, RegistrationStatus, Tournament, TournamentStatus } from './types'
 import { MOCK_COURSES, MOCK_TOURNAMENTS } from './data'
+import { withCourseDefaults, withTournamentDefaults } from './golf'
 
 /**
  * Admin-editable data store (prototype — no backend).
@@ -12,8 +13,8 @@ import { MOCK_COURSES, MOCK_TOURNAMENTS } from './data'
  * This file is shared verbatim between the mobile and web projects.
  */
 
-// v2: tournaments/courses carry organizerId and drafts exist
-const STORAGE_KEY = 'gtp-admin-data-v2'
+// v3: full course/tournament set-up (tee sets, hole maps, rounds, scoring, fees, tee sheet…)
+const STORAGE_KEY = 'gtp-admin-data-v3'
 
 // Pristine copies for "Reset demo data"
 const DEFAULT_TOURNAMENTS: Tournament[] = structuredClone(MOCK_TOURNAMENTS)
@@ -42,12 +43,13 @@ function persist() {
 // Load saved edits once, at module init, before any screen renders
 ;(function load() {
   try {
-    localStorage.removeItem('gtp-admin-data-v1') // older format, before organisers
+    localStorage.removeItem('gtp-admin-data-v1') // older formats
+    localStorage.removeItem('gtp-admin-data-v2')
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return
     const saved = JSON.parse(raw) as { tournaments?: Tournament[]; courses?: Course[] }
-    if (Array.isArray(saved.tournaments)) replaceContents(MOCK_TOURNAMENTS, saved.tournaments)
-    if (Array.isArray(saved.courses)) replaceContents(MOCK_COURSES, saved.courses)
+    if (Array.isArray(saved.tournaments)) replaceContents(MOCK_TOURNAMENTS, saved.tournaments.map(withTournamentDefaults))
+    if (Array.isArray(saved.courses)) replaceContents(MOCK_COURSES, saved.courses.map(withCourseDefaults))
   } catch {
     /* corrupt or unavailable storage — fall back to defaults */
   }
@@ -131,6 +133,7 @@ export const STATUS_OPTIONS: { value: TournamentStatus; label: string }[] = [
   { value: 'registration-open',   label: 'Registration open' },
   { value: 'registration-closed', label: 'Registration closed' },
   { value: 'upcoming',            label: 'Upcoming' },
+  { value: 'in-progress',         label: 'Live — in progress' },
   { value: 'completed',           label: 'Completed' },
   { value: 'cancelled',           label: 'Cancelled' },
 ]

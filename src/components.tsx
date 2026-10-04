@@ -531,6 +531,7 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; d
   'registration-open': { label: 'Registration Open',   bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
   'open':              { label: 'Registration Open',   bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
   'upcoming':          { label: 'Upcoming',             bg: 'bg-sky-50',     text: 'text-sky-700',     dot: 'bg-sky-500'     },
+  'in-progress':       { label: 'Live',                 bg: 'bg-rose-500',   text: 'text-white',       dot: 'bg-white animate-pulse' },
   'coming-soon':       { label: 'Coming Soon',          bg: 'bg-amber-50',   text: 'text-amber-700',   dot: 'bg-amber-500'   },
   'published':         { label: 'Coming Soon',          bg: 'bg-amber-50',   text: 'text-amber-700',   dot: 'bg-amber-500'   },
   'registration-closed': { label: 'Reg. Closed',       bg: 'bg-rose-50',    text: 'text-rose-700',    dot: 'bg-rose-500'    },
