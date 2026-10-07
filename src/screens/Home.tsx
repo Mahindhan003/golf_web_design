@@ -1,3 +1,4 @@
+import { handicapText, headlineStat } from '../account-rules'
 import {
   SectionHeader, TournamentCard, StatusBadge, GlassChip, IconArrowRight, Button,
 } from '../components'
@@ -121,7 +122,7 @@ export default function Home() {
             />
             <p className="relative text-white/55 text-[13px] font-semibold font-display">Handicap Index</p>
             <div className="relative flex items-end justify-between mt-1">
-              <p className="font-display font-extrabold text-lime-400 text-[56px] leading-none tracking-tight">{p.handicapIndex.toFixed(1)}</p>
+              <p className="font-display font-extrabold text-lime-400 text-[56px] leading-none tracking-tight">{handicapText(p)}</p>
               <div className="flex gap-6 pb-1">
                 <div className="text-right">
                   <p className="font-display font-bold text-white text-[24px] leading-none">{p.tournamentsPlayed}</p>
@@ -129,8 +130,8 @@ export default function Home() {
                 </div>
                 <div className="w-px bg-white/15" />
                 <div className="text-right">
-                  <p className="font-display font-bold text-white text-[24px] leading-none">{p.wins}</p>
-                  <p className="text-white/55 text-[12px] mt-1.5">Wins</p>
+                  <p className="font-display font-bold text-white text-[24px] leading-none">{headlineStat(p).value}</p>
+                  <p className="text-white/55 text-[12px] mt-1.5">{headlineStat(p).label}</p>
                 </div>
               </div>
             </div>

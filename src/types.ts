@@ -83,6 +83,24 @@ export interface Tournament {
   localRules?: string
   /** Final results are visible to golfers */
   resultsPublished?: boolean
+
+  /* ── Create Tournament wizard (Docs/CREATE TOURNAMENT - REVISED.txt) ── */
+  logoUrl?: string
+  /** IANA time zone, e.g. "America/Toronto" */
+  timeZone?: string
+  contactPerson?: string
+  participation?: 'individual' | 'team'
+  team?: TeamSettings
+  /** Target round time and how far behind a group can fall before it's flagged */
+  pace?: { targetMinutes: number; flagMinutes: number }
+  scoreVerification?: 'organizer' | 'none'
+  visibility?: 'public'
+}
+
+export interface TeamSettings {
+  size: 2 | 3 | 4
+  /** Golfers register with partners, or the organiser builds the teams */
+  formation: 'players' | 'organizer'
 }
 
 export interface TournamentRound {
@@ -90,6 +108,7 @@ export interface TournamentRound {
   date: string
   /** Which holes the round is played over */
   holes: 'all' | 'front' | 'back'
+  name?: string
 }
 
 export type ScoringBasis = 'gross' | 'net' | 'gross-and-net'
@@ -106,6 +125,12 @@ export interface ScoringRules {
   cutAfterRound: number
   /** Number of players (and ties) who make the cut */
   cutSize: number
+  /** Handicap (net results) or scratch (gross only) */
+  usage?: 'handicap' | 'scratch'
+  /** Handicap Index is locked on this date; course handicaps are calculated once then */
+  lockDate?: string
+  /** Holes used for a playoff tie-break */
+  playoffHoles?: number[]
 }
 
 export interface Eligibility {
@@ -125,6 +150,10 @@ export interface Division {
   maxHandicap: number
   /** Tee set (Course.teeSets[].id) this division plays from */
   teeSetId: string
+  gender?: 'any' | 'men' | 'women'
+  minAge?: number
+  maxAge?: number
+  maxPlayers?: number
 }
 
 export interface RegistrationWindow {
@@ -134,6 +163,10 @@ export interface RegistrationWindow {
   waitlist: boolean
   withdrawBy: string
   refundPolicy: string
+  minPlayers?: number
+  /** Golfers register themselves, the organiser adds them, or both */
+  method?: 'self' | 'organizer' | 'both'
+  allowWithdrawal?: boolean
 }
 
 export interface TournamentFees {
@@ -145,6 +178,9 @@ export interface TournamentFees {
   earlyBirdUntil?: string
   perTeam: boolean
   includes: string[]
+  type?: 'free' | 'per-player' | 'per-team' | 'per-group'
+  /** Tax / HST rate in percent; undefined = no tax */
+  taxRate?: number
 }
 
 export interface Prize {
@@ -153,6 +189,9 @@ export interface Prize {
   /** Division id, or empty for overall */
   divisionId?: string
   value: string
+  category?: string
+  /** Hole for longest drive / closest to the pin */
+  hole?: number
 }
 
 export interface TeeSheetSettings {
@@ -163,12 +202,16 @@ export interface TeeSheetSettings {
   groupSize: 2 | 3 | 4
   /** Tee times off the 1st only, or the 1st and 10th */
   startingTees: 'first' | 'first-and-tenth'
+  pairing?: 'automatic' | 'manual'
+  /** When golfers can see the tee sheet (local date-time) */
+  publishAt?: string
 }
 
 export interface Official {
   name: string
   role: string
   phone: string
+  email?: string
 }
 
 export interface HoleData {
@@ -220,6 +263,23 @@ export interface TeeSet {
   womenSlope?: number
   /** Yards per hole from these tees, in hole order */
   yards: number[]
+  /** Nine-hole ratings, needed for 9-hole rounds on an 18-hole course (WHS) */
+  menFront?: NineRating
+  menBack?: NineRating
+  womenFront?: NineRating
+  womenBack?: NineRating
+}
+
+export interface NineRating { rating: number; slope: number }
+
+/** A past set of ratings / scorecard, kept so tournaments played on it don't change */
+export interface CourseVersion {
+  version: number
+  effectiveFrom: string
+  /** Last day it applied */
+  until: string
+  teeSets: TeeSet[]
+  holeData: Pick<HoleData, 'hole' | 'par' | 'yards' | 'handicap' | 'parWomen' | 'handicapWomen'>[]
 }
 
 export type CourseStatus = 'open' | 'closed' | 'maintenance'
@@ -257,6 +317,22 @@ export interface Course {
   dressCode?: string
   status?: CourseStatus
   statusNote?: string
+
+  /* ── Create Course wizard (Docs/CREATE COURSE.txt) ── */
+  /** Club / facility; `name` is the course, e.g. "North Course" */
+  facilityName?: string
+  courseType?: 'public' | 'semi-private' | 'private' | 'resort'
+  distanceUnit?: 'yards' | 'metres'
+  postalCode?: string
+  timeZone?: string
+  /** Draft = admins only · Active = usable in tournaments · Archived = hidden from new tournaments */
+  lifecycle?: 'draft' | 'active' | 'archived'
+  /** Tee set shown on the scorecard (its yards are holeData.yards, its men's rating is `rating`) */
+  scorecardTeeId?: string
+  /** Ratings / scorecard version and the date it applies from */
+  version?: number
+  effectiveFrom?: string
+  history?: CourseVersion[]
 }
 
 export interface GolferProfile {
@@ -282,25 +358,55 @@ export interface GolferProfile {
   dietary: string[]
   shirtSize: string
   membership: 'Member' | 'Guest'
+  /* ── Registration (Docs/REGISTER GOLFER.txt) ── */
+  /** Non-binary / prefer not to say: which tee ratings to use for course handicap */
+  ratingsGender?: 'men' | 'women'
+  street?: string
+  region?: string
+  postalCode?: string
+  emergencyContactRelationship?: string
+  /** false = "Not yet" (no Handicap Index) */
+  hasHandicap?: boolean
+  /** When the golfer last changed their Handicap Index */
+  handicapUpdated?: string
+  preferredContact?: string
+  dietaryNote?: string
+  marketingOptIn?: boolean
+  /** Must be true before registering for tournaments */
+  emailVerified?: boolean
 }
 
 /** What the sign-up + profile-setup flow collects before the account is created */
 export interface NewAccount {
   fullName: string
+  firstName?: string
+  lastName?: string
   email: string
   phone: string
   dob: string
   gender: string
+  ratingsGender?: 'men' | 'women'
+  street?: string
+  city?: string
+  region?: string
+  postalCode?: string
+  country: string
   emergencyContactName: string
   emergencyContactPhone: string
+  emergencyContactRelationship?: string
+  hasHandicap: boolean
+  /** Parsed Handicap Index as text ('' when "not yet"); plus handicaps are negative */
   handicapIndex: string
   handicapBody: string
   handicapNumber: string
   homeClub: string
   preferredTee: string
-  dietary: string[]
-  shirtSize: string
   membership: 'Member' | 'Guest'
+  preferredContact: string
+  dietary: string[]
+  dietaryNote?: string
+  marketingOptIn?: boolean
+  emailVerified: boolean
 }
 
 export interface SharedNavProps {

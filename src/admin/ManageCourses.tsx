@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import type { Course } from '../types'
 import { MOCK_COURSES, MOCK_TOURNAMENTS } from '../data'
-import { useDataVersion, upsertCourse, deleteCourse } from '../store'
+import { useDataVersion, deleteCourse } from '../store'
 import { PageHeader } from '../shell'
 import { Button, SearchInput, EmptyState } from '../components'
 import { useApp } from '../app-context'
 import { navigate } from '../router'
-import { CourseForm } from './forms'
-import { IconPlus, IconPencil, IconTrash, NoAccess, Can } from './AdminShell'
-import { BackLink } from '../screens/TournamentDetails'
+import { IconPlus, IconPencil, IconTrash, Can } from './AdminShell'
 import { canChangeCourse, organizerName } from './access'
 
 export function useConfirmDeleteCourse() {
@@ -81,6 +79,9 @@ export function AdminCourses() {
                   <span className="absolute top-3 left-3 glass-dark h-6 px-2.5 rounded-full text-[11px] font-semibold font-display text-white inline-flex items-center">
                     {events} event{events === 1 ? '' : 's'}
                   </span>
+                  {c.lifecycle && c.lifecycle !== 'active' && (
+                    <span className={`absolute top-3 right-3 h-6 px-2.5 rounded-full text-[11px] font-bold font-display inline-flex items-center capitalize ${c.lifecycle === 'draft' ? 'bg-white text-ink' : 'bg-gray-200 text-gray-600'}`}>{c.lifecycle}</span>
+                  )}
                 </a>
                 <div className="px-3 pt-3.5 pb-2 flex-1 flex flex-col">
                   <h3 className="font-display font-bold text-ink text-[16px] tracking-tight">{c.name}</h3>
@@ -108,76 +109,6 @@ export function AdminCourses() {
             )
           })}
         </div>
-      )}
-    </div>
-  )
-}
-
-/* ───────── Create / edit ───────── */
-
-export function AdminCourseEditor({ id }: { id: string | null }) {
-  useDataVersion()
-  const { showToast, can, adminUser } = useApp()
-  const confirmDelete = useConfirmDeleteCourse()
-  const existing = id ? MOCK_COURSES.find(c => c.id === id) : undefined
-
-  if (id && !existing) {
-    return (
-      <div className="bg-white rounded-[32px] shadow-card">
-        <EmptyState title="Course not found" subtitle="It may have been deleted."
-          action={{ label: 'Back to courses', onClick: () => navigate('/admin/courses') }} />
-      </div>
-    )
-  }
-
-  const isNew = !existing
-  const done = () => navigate('/admin/courses')
-  if (isNew && !can('courses.create')) return <NoAccess what="create courses" />
-  if (!can('courses.view')) return <NoAccess what="view courses" />
-  // Organisers can open any course but only change their own
-  const readOnly = !isNew && (!can('courses.edit') || !canChangeCourse(adminUser, existing!))
-
-  return (
-    <div className="page-in max-w-[920px]">
-      <BackLink label="Courses" onClick={done} />
-      <PageHeader
-        eyebrow={isNew ? 'Create' : readOnly ? 'View only' : 'Edit'}
-        title={isNew ? 'New course' : existing.name}
-        actions={!isNew && can('courses.delete') && canChangeCourse(adminUser, existing!) && (
-          <button onClick={() => confirmDelete(existing, done)}
-            className="h-11 px-4 rounded-full bg-rose-50 text-rose-600 text-[14px] font-bold font-display flex items-center gap-2 hover:bg-rose-100">
-            <IconTrash /> Delete
-          </button>
-        )}
-      />
-
-      <CourseForm
-        key={existing?.id ?? 'new'}
-        formId="course-form"
-        initial={existing}
-        readOnly={readOnly}
-        scorecardLocked={!can('courses.scorecard')}
-        onSave={c => {
-          upsertCourse(isNew ? { ...c, organizerId: adminUser?.organizationId } : c)
-          showToast(isNew ? `"${c.name}" added` : 'Course saved')
-          done()
-        }}
-      />
-
-      {readOnly ? (
-        <p className="mt-6 text-[13px] text-gray-500">{can('courses.edit') ? 'This course was added by another organiser or the platform, so you can view it but not change it.' : 'Your role can view this course but not change it.'}</p>
-      ) : (
-      <div className="sticky bottom-4 mt-8 z-10">
-        <div className="bg-ink rounded-full shadow-float p-2 pl-6 flex items-center gap-3">
-          <p className="flex-1 text-[13px] font-medium text-white/60 truncate">
-            {isNew ? 'The course becomes available when creating tournaments' : 'Tournaments at this course update automatically'}
-          </p>
-          <button type="button" onClick={done} className="h-11 px-5 rounded-full text-white/80 text-sm font-semibold font-display hover:bg-white/10">Cancel</button>
-          <Button type="submit" form="course-form" className="bg-lime-400! text-ink! shadow-none!">
-            {isNew ? 'Add course' : 'Save changes'}
-          </Button>
-        </div>
-      </div>
       )}
     </div>
   )

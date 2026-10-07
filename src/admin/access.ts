@@ -146,11 +146,28 @@ export interface AdminUser {
   lastSignIn?: string
   /** The built-in platform admin can't be deactivated or moved off Super Admin */
   system?: boolean
+  /** Role in their organisation, e.g. "Tournament Director" (organisers only) */
+  jobTitle?: string
+  /** Opted in to product news (CASL: separate, unticked opt-in) */
+  marketingOptIn?: boolean
 }
 
 export type OrgStatus = 'pending' | 'approved' | 'rejected' | 'suspended'
-export type OrgType = 'Golf club' | 'Tournament organizer' | 'Association' | 'Corporate' | 'Charity'
-export const ORG_TYPES: OrgType[] = ['Golf club', 'Tournament organizer', 'Association', 'Corporate', 'Charity']
+export type OrgType = 'Golf club' | 'Golf association' | 'Corporate' | 'Charity / non-profit' | 'Independent tournament organizer'
+export const ORG_TYPES: OrgType[] = ['Golf club', 'Golf association', 'Corporate', 'Charity / non-profit', 'Independent tournament organizer']
+/** Older saved values → current names */
+const LEGACY_TYPES: Record<string, OrgType> = { Association: 'Golf association', Charity: 'Charity / non-profit', 'Tournament organizer': 'Independent tournament organizer' }
+
+export const EVENTS_PER_YEAR = ['1–5', '6–10', '11–25', '25+']
+export const FIELD_SIZES = ['Under 50', '50–100', '100–150', '150+']
+
+/** A review decision, kept as the organisation's audit history */
+export interface OrgDecision {
+  status: OrgStatus
+  byUserId: string
+  at: string
+  reason?: string
+}
 
 export interface Organization {
   id: string
@@ -164,6 +181,17 @@ export interface Organization {
   country: string
   homeCourseId?: string
   eventsPerYear?: string
+  about?: string
+  logoUrl?: string
+  street?: string
+  postalCode?: string
+  /** Not shown publicly: help the platform team verify the organisation */
+  registrationNumber?: string
+  golfCanadaId?: string
+  fieldSize?: string
+  /** The owner clicked the verification link sent at sign-up */
+  emailVerified?: boolean
+  decisions?: OrgDecision[]
   status: OrgStatus
   /** Why it was rejected or suspended */
   statusReason?: string
@@ -253,13 +281,16 @@ const DEFAULT_ORGS: Organization[] = [
   {
     id: 'o-savannah', name: 'Savannah Golf Club', type: 'Golf club',
     email: 'events@savannahgolf.com', phone: '+1 (912) 555-0140', website: 'savannahgolf.com',
-    city: 'Savannah', region: 'Georgia', country: 'United States', eventsPerYear: '10–25',
+    street: '1661 Wilmington Island Rd', city: 'Savannah', region: 'Georgia', postalCode: '31410', country: 'United States',
+    eventsPerYear: '11–25', fieldSize: '100–150', emailVerified: true,
+    decisions: [{ status: 'approved', byUserId: 'u-admin', at: '2026-03-03T09:00:00.000Z' }],
     status: 'approved', ownerUserId: 'u-savannah', createdAt: '2026-03-02T10:00:00.000Z',
   },
   {
-    id: 'o-coastal', name: 'Coastal Charity Golf', type: 'Charity',
+    id: 'o-coastal', name: 'Coastal Charity Golf', type: 'Charity / non-profit',
     email: 'hello@coastalcharity.org', phone: '+1 (831) 555-0199', website: 'coastalcharity.org',
-    city: 'Monterey', region: 'California', country: 'United States', eventsPerYear: '1–5',
+    street: '400 Cannery Row', city: 'Monterey', region: 'California', postalCode: '93940', country: 'United States',
+    eventsPerYear: '1–5', fieldSize: 'Under 50', registrationNumber: 'EIN 94-1234567', emailVerified: false,
     status: 'pending', ownerUserId: 'u-coastal', createdAt: '2026-09-20T15:30:00.000Z',
   },
 ]
@@ -282,7 +313,13 @@ const listeners = new Set<() => void>()
     const saved = JSON.parse(raw) as { roles?: Role[]; users?: AdminUser[]; orgs?: Organization[] }
     if (Array.isArray(saved.roles) && saved.roles.some(r => r.id === SUPER_ADMIN_ROLE_ID) && saved.roles.some(r => r.id === ORGANIZER_ROLE_ID)) roles = saved.roles
     if (Array.isArray(saved.users) && saved.users.some(u => u.system)) users = saved.users
-    if (Array.isArray(saved.orgs)) orgs = saved.orgs
+    if (Array.isArray(saved.orgs)) orgs = saved.orgs.map(o => ({
+      ...o,
+      type: LEGACY_TYPES[o.type] ?? o.type,
+      eventsPerYear: o.eventsPerYear === '10–25' ? '11–25' : o.eventsPerYear,
+      // Organisations decided before verification existed count as verified
+      emailVerified: o.emailVerified ?? o.status !== 'pending',
+    }))
   } catch {
     /* corrupt or unavailable storage — keep defaults */
   }
@@ -467,6 +504,9 @@ export function saveUser(
   if (emailTaken(email, input.id)) return { ok: false, reason: 'Another admin user already uses this email' }
 
   const organizationId = existing ? existing.organizationId : (actor.organizationId || undefined)
+  if (!existing && organizationId && getOrganization(organizationId)?.status !== 'approved') {
+    return { ok: false, reason: 'You can invite your team once your organisation is approved' }
+  }
   const roleChanging = !existing || existing.roleId !== input.roleId
   if (roleChanging) {
     if (!getRole(input.roleId)) return { ok: false, reason: 'Choose a role' }
@@ -521,7 +561,9 @@ export interface OrganizerSignup {
   email: string
   phone: string
   password: string
-  org: Omit<Organization, 'id' | 'status' | 'statusReason' | 'ownerUserId' | 'createdAt'>
+  jobTitle?: string
+  marketingOptIn?: boolean
+  org: Omit<Organization, 'id' | 'status' | 'statusReason' | 'ownerUserId' | 'createdAt' | 'emailVerified' | 'decisions'>
 }
 
 /** Organiser self sign-up: creates a pending organisation and its owner login */
@@ -541,11 +583,14 @@ export function registerOrganizer(input: OrganizerSignup): Result & { userId?: s
     status: 'pending',
     ownerUserId: userId,
     createdAt: new Date().toISOString(),
+    emailVerified: false,
+    decisions: [],
   }
   orgs = [...orgs, org]
   users = [...users, {
     id: userId, name: input.fullName.trim(), email, password: input.password,
     roleId: ORGANIZER_ROLE_ID, organizationId: org.id, active: true,
+    jobTitle: input.jobTitle?.trim() || undefined, marketingOptIn: !!input.marketingOptIn,
   }]
   commit()
   return { ok: true, userId }
@@ -562,12 +607,49 @@ export function updateOrganization(actor: AdminUser | undefined, id: string, pat
   return { ok: true }
 }
 
+/** Allowed review moves: a registration is decided once; afterwards only suspend / reactivate */
+const NEXT_STATUS: Record<OrgStatus, OrgStatus[]> = {
+  pending: ['approved', 'rejected'],
+  approved: ['suspended'],
+  suspended: ['approved'],
+  rejected: [],
+}
+
 export function setOrganizationStatus(actor: AdminUser | undefined, id: string, status: OrgStatus, reason?: string): Result {
   if (!actor || actor.organizationId || !userPermissions(actor).includes('organizers.approve')) return { ok: false, reason: 'You can’t review organisers' }
+  const org = getOrganization(id)
+  if (!org) return { ok: false, reason: 'Organisation not found' }
+  if (!NEXT_STATUS[org.status].includes(status)) return { ok: false, reason: 'This organisation has already been reviewed' }
+  if (status === 'approved' && org.status === 'pending' && !org.emailVerified) return { ok: false, reason: 'The owner must verify their email before approval' }
   if ((status === 'rejected' || status === 'suspended') && !reason?.trim()) return { ok: false, reason: 'Give a reason so the organiser knows what to fix' }
-  orgs = orgs.map(o => (o.id === id ? { ...o, status, statusReason: status === 'approved' ? undefined : reason?.trim() } : o))
+  const decision: OrgDecision = { status, byUserId: actor.id, at: new Date().toISOString(), reason: reason?.trim() || undefined }
+  orgs = orgs.map(o => (o.id === id ? { ...o, status, statusReason: status === 'approved' ? undefined : reason?.trim(), decisions: [...(o.decisions ?? []), decision] } : o))
   commit()
   return { ok: true }
+}
+
+export const allowedStatusMoves = (org: Organization) => NEXT_STATUS[org.status]
+
+/** Prototype stand-in for the owner clicking the verification link in their email */
+export function verifyOrganizationEmail(id: string) {
+  orgs = orgs.map(o => (o.id === id ? { ...o, emailVerified: true } : o))
+  commit()
+}
+
+const domainOf = (v?: string) => v?.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split('@').pop()
+
+/** What the reviewer should check before deciding */
+export function reviewChecklist(org: Organization) {
+  const owner = getUser(org.ownerUserId)
+  const site = domainOf(org.website)
+  const emailDomain = domainOf(owner?.email)
+  const duplicate = orgs.find(o => o.id !== org.id && o.name.trim().toLowerCase() === org.name.trim().toLowerCase() && o.city.trim().toLowerCase() === org.city.trim().toLowerCase())
+  return [
+    { label: 'Owner email verified', ok: !!org.emailVerified },
+    { label: site ? `Owner email matches the website (${site})` : 'No website to match the owner email against', ok: !!site && !!emailDomain && (emailDomain === site || emailDomain.endsWith(`.${site}`)) },
+    { label: org.registrationNumber || org.golfCanadaId ? 'Registration number or Golf Canada ID given' : 'No registration number or Golf Canada ID', ok: !!(org.registrationNumber || org.golfCanadaId) },
+    { label: duplicate ? `Possible duplicate: ${duplicate.name} (${duplicate.status})` : 'No other organisation with this name in the same city', ok: !duplicate },
+  ]
 }
 
 /* ───────── Tournament visibility ───────── */
@@ -605,12 +687,29 @@ export function canChangeCourse(actor: AdminUser | undefined, course: { organize
 
 /* ───────── Sign-in ───────── */
 
-export type AuthFailure = 'invalid' | 'inactive' | 'org-rejected' | 'org-suspended'
+/** 'unknown' = no console account with this email (prototype: the sign-in screen then signs in a mock golfer) */
+export type AuthFailure = 'unknown' | 'invalid' | 'inactive' | 'org-rejected' | 'org-suspended' | 'locked'
+
+/** Wrong-password counts per email; 5 in a row locks sign-in for 15 minutes (session only in the prototype) */
+const failures = new Map<string, { count: number; until?: number }>()
+const LOCK_AFTER = 5
+const LOCK_MS = 15 * 60_000
 
 export function authenticate(email: string, password: string):
   { ok: true; user: AdminUser } | { ok: false; reason: AuthFailure; detail?: string } {
-  const user = users.find(u => u.email.toLowerCase() === email.trim().toLowerCase())
-  if (!user || user.password !== password) return { ok: false, reason: 'invalid' }
+  const key = email.trim().toLowerCase()
+  const f = failures.get(key)
+  if (f?.until && f.until > Date.now()) return { ok: false, reason: 'locked', detail: String(Math.ceil((f.until - Date.now()) / 60_000)) }
+  const user = users.find(u => u.email.toLowerCase() === key)
+  if (!user) return { ok: false, reason: 'unknown' }
+  if (user.password !== password) {
+    // Prototype: golfers sign in through a separate mock, so only console accounts are counted here.
+    // A real backend counts every email, so the answer never reveals whether an account exists.
+    const count = (f?.until ? 0 : f?.count ?? 0) + 1
+    failures.set(key, count >= LOCK_AFTER ? { count, until: Date.now() + LOCK_MS } : { count })
+    return count >= LOCK_AFTER ? { ok: false, reason: 'locked', detail: '15' } : { ok: false, reason: 'invalid' }
+  }
+  failures.delete(key)
   if (!user.active) return { ok: false, reason: 'inactive' }
   const org = getOrganization(user.organizationId)
   if (org?.status === 'rejected') return { ok: false, reason: 'org-rejected', detail: org.statusReason }
@@ -625,6 +724,7 @@ export function authFailureMessage(r: { reason: AuthFailure; detail?: string }) 
     case 'inactive':      return 'This admin account has been deactivated. Contact your administrator.'
     case 'org-rejected':  return `Your organiser application was not approved${r.detail ? `: ${r.detail}` : '.'}`
     case 'org-suspended': return `Your organisation has been suspended${r.detail ? `: ${r.detail}` : '.'} Contact support.`
+    case 'locked':        return `Too many wrong passwords. Try again in ${r.detail ?? 15} minute${r.detail === '1' ? '' : 's'}.`
     default:              return 'Invalid email or password'
   }
 }

@@ -6,12 +6,11 @@ import { MOCK_COURSES, MOCK_TOURNAMENTS } from '../data'
 import { useDataVersion } from '../store'
 import { NoAccess, ORG_STATUS_STYLE } from './AdminShell'
 import {
-  getOrganizations, getUser, updateOrganization, setOrganizationStatus, useAccessVersion, visibleUsers,
-  ORG_TYPES, type Organization, type OrgStatus, type OrgType,
+  getOrganizations, getUser, updateOrganization, setOrganizationStatus, useAccessVersion, visibleUsers, allowedStatusMoves, reviewChecklist,
+  ORG_TYPES, EVENTS_PER_YEAR, FIELD_SIZES, type Organization, type OrgStatus, type OrgType,
 } from './access'
-
-const COUNTRIES = ['United States', 'United Kingdom', 'Ireland', 'Canada', 'Australia', 'New Zealand', 'South Africa', 'Spain', 'Portugal', 'Japan', 'India']
-const EVENTS_PER_YEAR = ['1–5', '6–10', '10–25', '25+']
+import { COUNTRIES, postalCodeError } from '../account-rules'
+import { Textarea } from './forms'
 
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
@@ -52,7 +51,9 @@ export function AdminOrganisation() {
   const homeCourse = MOCK_COURSES.find(c => c.id === org.homeCourseId)?.name
 
   const statusCopy: Record<OrgStatus, string> = {
-    pending: 'Our team is reviewing your details — usually within 1–2 working days. Meanwhile you can invite your team and prepare draft tournaments.',
+    pending: org.emailVerified
+      ? 'Our team is reviewing your details — usually within 2 business days. Meanwhile you can complete this profile and prepare draft tournaments.'
+      : 'Verify your email first (see the banner above) — our team can only approve verified organisations.',
     approved: 'Your organisation is approved. Tournaments you publish are visible to golfers.',
     rejected: org.statusReason ? `Not approved: ${org.statusReason}` : 'Your application was not approved.',
     suspended: org.statusReason ? `Suspended: ${org.statusReason}` : 'Your organisation is suspended.',
@@ -94,10 +95,13 @@ export function AdminOrganisation() {
               <h2 className="font-display font-bold text-ink text-[17px] tracking-tight mb-1">Details</h2>
               <dl className="divide-y divide-black/[0.05]">
                 <Row label="Type" value={org.type} />
-                <Row label="Location" value={`${org.city}, ${org.region}`} />
+                <Row label="Address" value={[org.street, org.city, org.region, org.postalCode].filter(Boolean).join(', ')} />
                 <Row label="Country" value={org.country} />
                 <Row label="Home course" value={homeCourse} />
                 <Row label="Events per year" value={org.eventsPerYear} />
+                <Row label="Typical field size" value={org.fieldSize} />
+                <Row label="Registration number" value={org.registrationNumber} />
+                <Row label="Golf Canada ID" value={org.golfCanadaId} />
               </dl>
             </section>
             <section className="bg-white rounded-[28px] shadow-card px-6 pt-5 pb-2">
@@ -106,9 +110,10 @@ export function AdminOrganisation() {
                 <Row label="Email" value={org.email} />
                 <Row label="Phone" value={org.phone} />
                 <Row label="Website" value={org.website} />
-                <Row label="Owner" value={owner ? `${owner.name}` : undefined} />
-                <Row label="Owner email" value={owner?.email} />
+                <Row label="Owner" value={owner ? `${owner.name}${owner.jobTitle ? ` · ${owner.jobTitle}` : ''}` : undefined} />
+                <Row label="Owner email" value={owner ? `${owner.email}${org.emailVerified ? ' · verified' : ' · not verified'}` : undefined} />
               </dl>
+              {org.about && <p className="text-[13px] text-gray-600 leading-relaxed py-3 border-t border-black/[0.05]">{org.about}</p>}
             </section>
           </div>
         )}
@@ -124,6 +129,13 @@ function OrgForm({ org, onDone }: { org: Organization; onDone: (saved: boolean) 
   const [email, setEmail]     = useState(org.email)
   const [phone, setPhone]     = useState(org.phone)
   const [website, setWebsite] = useState(org.website ?? '')
+  const [about, setAbout]     = useState(org.about ?? '')
+  const [logo, setLogo]       = useState(org.logoUrl ?? '')
+  const [street, setStreet]   = useState(org.street ?? '')
+  const [postal, setPostal]   = useState(org.postalCode ?? '')
+  const [regNo, setRegNo]     = useState(org.registrationNumber ?? '')
+  const [gcId, setGcId]       = useState(org.golfCanadaId ?? '')
+  const [fieldSize, setField] = useState(org.fieldSize ?? '')
   const [city, setCity]       = useState(org.city)
   const [region, setRegion]   = useState(org.region)
   const [country, setCountry] = useState(org.country)
@@ -133,13 +145,17 @@ function OrgForm({ org, onDone }: { org: Organization; onDone: (saved: boolean) 
 
   function submit(e: FormEvent) {
     e.preventDefault()
-    if (!name.trim() || !city.trim() || !region.trim()) { setError('Name, city and state / region are required'); return }
+    if (!name.trim() || !street.trim() || !city.trim() || !region.trim() || !postal.trim()) { setError('Name, street, city, province / state and postal code are required'); return }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('Enter a valid contact email'); return }
+    const postalErr = postalCodeError(country, postal)
+    if (postalErr) { setError(postalErr); return }
     const r = updateOrganization(adminUser, org.id, {
       name: name.trim(), type, email: email.trim(), phone: phone.trim(),
       website: website.trim().replace(/^https?:\/\//, '') || undefined,
-      city: city.trim(), region: region.trim(), country,
-      homeCourseId: home || undefined, eventsPerYear: events || undefined,
+      street: street.trim(), city: city.trim(), region: region.trim(), postalCode: postal.trim().toUpperCase(), country,
+      homeCourseId: home || undefined, eventsPerYear: events || undefined, fieldSize: fieldSize || undefined,
+      about: about.trim() || undefined, logoUrl: logo.trim() || undefined,
+      registrationNumber: regNo.trim() || undefined, golfCanadaId: gcId.trim() || undefined,
     })
     if (!r.ok) { setError(r.reason); return }
     onDone(true)
@@ -150,18 +166,27 @@ function OrgForm({ org, onDone }: { org: Organization; onDone: (saved: boolean) 
       {error && <div role="alert" className="bg-rose-50 text-rose-700 rounded-2xl px-4 py-3 text-sm font-semibold font-display">{error}</div>}
       <Input label="Organisation name" value={name} onChange={e => { setName(e.target.value); setError('') }} />
       <ChoiceChips label="Organisation type" options={ORG_TYPES} value={type} onChange={v => setType(v as OrgType)} />
+      <Textarea label="About the organisation" value={about} onChange={e => setAbout(e.target.value)} style={{ minHeight: 90 }} />
+      <Input label="Logo link" placeholder="https://…" value={logo} onChange={e => setLogo(e.target.value)} />
       <div className="grid sm:grid-cols-2 gap-5">
         <Input label="Contact email" type="email" value={email} onChange={e => { setEmail(e.target.value); setError('') }} />
         <Input label="Contact phone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} />
       </div>
       <Input label="Website" value={website} onChange={e => setWebsite(e.target.value)} placeholder="yourclub.com" />
-      <div className="grid sm:grid-cols-3 gap-5">
+      <Input label="Street address" value={street} onChange={e => { setStreet(e.target.value); setError('') }} />
+      <div className="grid sm:grid-cols-2 gap-5">
         <Input label="City" value={city} onChange={e => { setCity(e.target.value); setError('') }} />
-        <Input label="State / region" value={region} onChange={e => { setRegion(e.target.value); setError('') }} />
+        <Input label="Province / state" value={region} onChange={e => { setRegion(e.target.value); setError('') }} />
+        <Input label="Postal / ZIP code" value={postal} onChange={e => { setPostal(e.target.value.toUpperCase()); setError('') }} />
         <SelectField label="Country" value={country} onChange={setCountry} options={COUNTRIES} />
       </div>
-      <SelectField label="Home course" placeholder="None" value={home} onChange={setHome} options={MOCK_COURSES.map(c => ({ value: c.id, label: c.name }))} />
+      <div className="grid sm:grid-cols-2 gap-5">
+        <Input label="Business / charity registration number" value={regNo} onChange={e => setRegNo(e.target.value)} />
+        <Input label="Golf Canada club / facility ID" value={gcId} onChange={e => setGcId(e.target.value)} />
+      </div>
+      <SelectField label="Home course" placeholder="None" value={home} onChange={setHome} options={MOCK_COURSES.filter(c => (c.lifecycle ?? 'active') === 'active').map(c => ({ value: c.id, label: c.name }))} />
       <ChoiceChips label="Tournaments per year" options={EVENTS_PER_YEAR} value={events} onChange={v => setEvents(v as string)} />
+      <ChoiceChips label="Typical field size" options={FIELD_SIZES} value={fieldSize} onChange={v => setField(v as string)} />
       <div className="flex gap-2.5 pt-2">
         <Button variant="secondary" onClick={() => onDone(false)}>Cancel</Button>
         <Button type="submit">Save details</Button>
@@ -228,7 +253,8 @@ export function AdminOrganizers() {
   if (adminOrg || !can('organizers.view')) return <NoAccess what="review organisers" />
 
   const all = getOrganizations()
-  const list = all.filter(o => tab === 'all' || o.status === tab)
+  // Oldest first, so nobody waits longest
+  const list = all.filter(o => tab === 'all' || o.status === tab).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   const canApprove = can('organizers.approve')
 
   function setStatus(org: Organization, status: OrgStatus, reason?: string) {
@@ -242,7 +268,7 @@ export function AdminOrganizers() {
     <div className="page-in">
       <PageHeader eyebrow="Platform" title="Organizers" />
       <p className="text-gray-500 -mt-4 mb-6 max-w-2xl">
-        Organisations sign up themselves. Review their details before their tournaments can go live. Suspending an organisation hides its events from golfers and blocks its team from signing in.
+        Organisations sign up themselves. Check each one against the checklist before their tournaments can go live — a registration is decided once. Suspending an organisation hides its events from golfers and blocks its team from signing in; every decision is recorded.
       </p>
 
       <div className="flex flex-wrap gap-1.5 mb-6">
@@ -274,16 +300,42 @@ export function AdminOrganizers() {
                   <div className="min-w-0">
                     <h2 className="font-display font-bold text-ink text-[19px] tracking-tight">{org.name}</h2>
                     <p className="text-[13px] text-gray-500">{org.type} · {org.city}, {org.region}, {org.country}</p>
+                    {org.about && <p className="text-[13px] text-gray-600 mt-1 line-clamp-2">{org.about}</p>}
                   </div>
                   <StatusChip status={org.status} />
                 </div>
 
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-3 mt-5 text-[13px]">
-                  <div><dt className="text-gray-400 font-semibold font-display text-[11px]">Owner</dt><dd className="text-ink font-semibold truncate">{owner?.name ?? '—'}</dd><dd className="text-gray-500 truncate">{owner?.email}</dd></div>
+                  <div><dt className="text-gray-400 font-semibold font-display text-[11px]">Owner</dt><dd className="text-ink font-semibold truncate">{owner?.name ?? '—'}{owner?.jobTitle ? ` · ${owner.jobTitle}` : ''}</dd><dd className="text-gray-500 truncate">{owner?.email}</dd></div>
                   <div><dt className="text-gray-400 font-semibold font-display text-[11px]">Contact</dt><dd className="text-ink font-semibold truncate">{org.email}</dd><dd className="text-gray-500">{org.phone}</dd></div>
                   <div><dt className="text-gray-400 font-semibold font-display text-[11px]">Website</dt><dd className="text-ink truncate">{org.website ?? '—'}</dd></div>
-                  <div><dt className="text-gray-400 font-semibold font-display text-[11px]">Events</dt><dd className="text-ink">{events.length} total{drafts ? ` · ${drafts} draft${drafts === 1 ? '' : 's'}` : ''} · {org.eventsPerYear ?? '?'} / year</dd></div>
+                  <div><dt className="text-gray-400 font-semibold font-display text-[11px]">Events</dt><dd className="text-ink">{events.length} total{drafts ? ` · ${drafts} draft${drafts === 1 ? '' : 's'}` : ''} · {org.eventsPerYear ?? '?'} / year{org.fieldSize ? ` · ${org.fieldSize} players` : ''}</dd></div>
+                  <div className="col-span-2"><dt className="text-gray-400 font-semibold font-display text-[11px]">Address</dt><dd className="text-ink">{[org.street, org.city, org.region, org.postalCode, org.country].filter(Boolean).join(', ')}</dd></div>
+                  <div><dt className="text-gray-400 font-semibold font-display text-[11px]">Registration number</dt><dd className="text-ink truncate">{org.registrationNumber ?? '—'}</dd></div>
+                  <div><dt className="text-gray-400 font-semibold font-display text-[11px]">Golf Canada ID</dt><dd className="text-ink truncate">{org.golfCanadaId ?? '—'}</dd></div>
                 </dl>
+
+                {org.status === 'pending' && (
+                  <ul className="mt-5 bg-canvas rounded-2xl p-4 space-y-1.5" aria-label="Review checklist">
+                    {reviewChecklist(org).map(item => (
+                      <li key={item.label} className="flex items-start gap-2 text-[13px]">
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${item.ok ? 'bg-pine-600 text-white' : 'bg-amber-400 text-ink'}`}>{item.ok ? '✓' : '!'}</span>
+                        <span className={item.ok ? 'text-ink' : 'text-amber-800'}>{item.label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {!!org.decisions?.length && (
+                  <details className="mt-4 text-[12px] text-gray-500">
+                    <summary className="cursor-pointer font-bold font-display text-gray-600">History ({org.decisions.length})</summary>
+                    <ul className="mt-2 space-y-1">
+                      {org.decisions.map((d, i) => (
+                        <li key={i}>{ORG_STATUS_STYLE[d.status].label} by {getUser(d.byUserId)?.name ?? 'platform'} · {formatDate(d.at)}{d.reason ? ` — ${d.reason}` : ''}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
 
                 {org.statusReason && (org.status === 'rejected' || org.status === 'suspended') && (
                   <p className="mt-4 text-[13px] bg-canvas rounded-2xl px-4 py-3 text-gray-600"><span className="font-semibold text-ink">Reason:</span> {org.statusReason}</p>
@@ -291,19 +343,19 @@ export function AdminOrganizers() {
 
                 <div className="flex flex-wrap items-center gap-2 mt-auto pt-5">
                   <span className="text-[12px] text-gray-400 mr-auto">Submitted {formatDate(org.createdAt)}</span>
-                  {canApprove && org.status === 'pending' && (
-                    <>
-                      <button onClick={() => setAsking({ org, status: 'rejected' })} className="h-10 px-4 rounded-full bg-rose-50 text-rose-600 text-[13px] font-bold font-display hover:bg-rose-100">Reject</button>
-                      <button onClick={() => setStatus(org, 'approved')} aria-label={`Approve ${org.name}`} className="h-10 px-5 rounded-full bg-ink text-lime-400 text-[13px] font-bold font-display hover:bg-pine-900">Approve</button>
-                    </>
+                  {canApprove && allowedStatusMoves(org).includes('rejected') && (
+                    <button onClick={() => setAsking({ org, status: 'rejected' })} className="h-10 px-4 rounded-full bg-rose-50 text-rose-600 text-[13px] font-bold font-display hover:bg-rose-100">Reject</button>
                   )}
-                  {canApprove && org.status === 'approved' && (
+                  {canApprove && allowedStatusMoves(org).includes('suspended') && (
                     <button onClick={() => setAsking({ org, status: 'suspended' })} className="h-10 px-4 rounded-full bg-rose-50 text-rose-600 text-[13px] font-bold font-display hover:bg-rose-100">Suspend</button>
                   )}
-                  {canApprove && (org.status === 'suspended' || org.status === 'rejected') && (
-                    <button onClick={() => setStatus(org, 'approved')} aria-label={`Approve ${org.name}`} className="h-10 px-5 rounded-full bg-ink text-lime-400 text-[13px] font-bold font-display hover:bg-pine-900">
-                      {org.status === 'suspended' ? 'Reactivate' : 'Approve'}
-                    </button>
+                  {canApprove && allowedStatusMoves(org).includes('approved') && (
+                    <span title={org.status === 'pending' && !org.emailVerified ? 'The owner must verify their email first' : undefined}>
+                      <button onClick={() => setStatus(org, 'approved')} disabled={org.status === 'pending' && !org.emailVerified} aria-label={`${org.status === 'suspended' ? 'Reactivate' : 'Approve'} ${org.name}`}
+                        className="h-10 px-5 rounded-full bg-ink text-lime-400 text-[13px] font-bold font-display hover:bg-pine-900 disabled:bg-gray-200 disabled:text-gray-400">
+                        {org.status === 'suspended' ? 'Reactivate' : 'Approve'}
+                      </button>
+                    </span>
                   )}
                 </div>
               </article>

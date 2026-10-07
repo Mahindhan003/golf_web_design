@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { Course, HoleData, RegistrationStatus, Tournament, TournamentStatus } from './types'
-import { MOCK_COURSES, MOCK_TOURNAMENTS } from './data'
+import { MOCK_COURSES, MOCK_TOURNAMENTS, fillSeedGaps } from './data'
 import { withCourseDefaults, withTournamentDefaults } from './golf'
 
 /**
@@ -50,6 +50,7 @@ function persist() {
     const saved = JSON.parse(raw) as { tournaments?: Tournament[]; courses?: Course[] }
     if (Array.isArray(saved.tournaments)) replaceContents(MOCK_TOURNAMENTS, saved.tournaments.map(withTournamentDefaults))
     if (Array.isArray(saved.courses)) replaceContents(MOCK_COURSES, saved.courses.map(withCourseDefaults))
+    fillSeedGaps(MOCK_COURSES, MOCK_TOURNAMENTS)
   } catch {
     /* corrupt or unavailable storage — fall back to defaults */
   }

@@ -28,6 +28,12 @@ export interface AccountBasics {
   /** Needed for organiser logins (golfer accounts are mock-only) */
   password?: string
   accountType?: AccountType
+  firstName?: string
+  lastName?: string
+  /** Organisers: their role in the organisation */
+  jobTitle?: string
+  /** Separate, unticked opt-in for product news (CASL) */
+  marketingOptIn?: boolean
 }
 
 export type Role = 'golfer' | 'admin'
@@ -132,7 +138,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAdminUserId(userId)
     setRole('admin')
     navigate('/admin', { replace: true })
-    showToast('Application submitted — you can start drafting tournaments while we review it')
+    showToast('Application submitted — check your inbox to verify your email')
   }, [showToast])
 
   const completeSetup = useCallback((a: NewAccount) => {
@@ -141,7 +147,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRole('golfer')
     setPV(v => v + 1)
     navigate('/home', { replace: true })
-    showToast(`Welcome to the clubhouse, ${MOCK_PROFILE.firstName}!`)
+    showToast(`Welcome, ${MOCK_PROFILE.firstName}! We've emailed a confirmation to ${MOCK_PROFILE.email}`)
   }, [showToast])
 
   const value = useMemo<AppState>(() => ({

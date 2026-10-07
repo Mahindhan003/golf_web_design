@@ -3,8 +3,9 @@ import { Button, Input, PasswordInput } from '../components'
 import { AuthLayout } from '../shell'
 import { useApp, type AccountType } from '../app-context'
 import { getUsers } from '../admin/access'
+import { isBlockedPassword, nameError } from '../account-rules'
 
-type Errors = Partial<Record<'fullName' | 'email' | 'phone' | 'password' | 'confirm', string>>
+type Errors = Partial<Record<'firstName' | 'lastName' | 'email' | 'phone' | 'password' | 'confirm' | 'terms', string>>
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -98,7 +99,11 @@ export default function SignUp() {
   const [typeChosen, setTypeChosen]   = useState(false)
   const isOrganizer = accountType === 'organizer'
 
-  const [fullName, setFullName] = useState(basics?.fullName ?? '')
+  const [firstName, setFirstName] = useState(basics?.firstName ?? basics?.fullName.split(/\s+/)[0] ?? '')
+  const [lastName, setLastName]   = useState(basics?.lastName ?? basics?.fullName.split(/\s+/).slice(1).join(' ') ?? '')
+  const [jobTitle, setJobTitle]   = useState(basics?.jobTitle ?? '')
+  const [terms, setTerms]         = useState(false)
+  const [marketing, setMarketing] = useState(basics?.marketingOptIn ?? false)
   const [email, setEmail]       = useState(basics?.email ?? '')
   const [phone, setPhone]       = useState(basics?.phone ?? '')
   const [password, setPassword] = useState('')
@@ -108,7 +113,8 @@ export default function SignUp() {
 
   function validate(): Errors {
     const e: Errors = {}
-    if (fullName.trim().split(/\s+/).filter(Boolean).length < 2) e.fullName = 'Enter your first and last name'
+    const fe = nameError(firstName, 'first'); if (fe) e.firstName = fe
+    const le = nameError(lastName, 'last'); if (le) e.lastName = le
     if (!email.trim()) e.email = 'Email is required'
     else if (!EMAIL_RE.test(email.trim())) e.email = 'Enter a valid email address'
     else if (isOrganizer && getUsers().some(u => u.email.toLowerCase() === email.trim().toLowerCase())) {
@@ -116,6 +122,8 @@ export default function SignUp() {
     }
     if (phone.replace(/\D/g, '').length < 7) e.phone = 'Enter a valid phone number'
     if (password.length < 8) e.password = 'Use at least 8 characters'
+    else if (isBlockedPassword(password)) e.password = 'This password is too common — choose another'
+    if (!terms) e.terms = 'Please agree to the Terms of Service and Privacy Policy'
     if (!confirm) e.confirm = 'Please confirm your password'
     else if (confirm !== password) e.confirm = "Passwords don't match"
     return e
@@ -131,7 +139,11 @@ export default function SignUp() {
     setLoading(true)
     setTimeout(() => {
       setLoading(false)
-      startSetup({ fullName: fullName.trim(), email: email.trim(), phone: phone.trim(), password, accountType: accountType ?? 'golfer' })
+      startSetup({
+        fullName: `${firstName.trim()} ${lastName.trim()}`, firstName: firstName.trim(), lastName: lastName.trim(),
+        email: email.trim(), phone: phone.trim(), password, accountType: accountType ?? 'golfer',
+        jobTitle: isOrganizer ? jobTitle.trim() || undefined : undefined, marketingOptIn: marketing,
+      })
     }, 1000)
   }
 
@@ -173,15 +185,12 @@ export default function SignUp() {
       )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-8" noValidate>
-        <Input
-          label="Full name"
-          placeholder="Alexander Hartwell"
-          value={fullName}
-          onChange={e => { setFullName(e.target.value); clear('fullName') }}
-          error={errors.fullName}
-          autoComplete="name"
-          onCanvas
-        />
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Input label="First name" placeholder="Alexander" value={firstName} autoComplete="given-name" onCanvas
+            onChange={e => { setFirstName(e.target.value); clear('firstName') }} error={errors.firstName} />
+          <Input label="Last name" placeholder="Hartwell" value={lastName} autoComplete="family-name" onCanvas
+            onChange={e => { setLastName(e.target.value); clear('lastName') }} error={errors.lastName} />
+        </div>
         <div className="grid sm:grid-cols-2 gap-4">
           <Input
             label={isOrganizer ? 'Work email' : 'Email address'}
@@ -194,7 +203,7 @@ export default function SignUp() {
             onCanvas
           />
           <Input
-            label="Phone number"
+            label={isOrganizer ? 'Mobile phone' : 'Phone number'}
             type="tel"
             placeholder="+1 (404) 555-0000"
             value={phone}
@@ -205,10 +214,15 @@ export default function SignUp() {
           />
         </div>
 
+        {isOrganizer && (
+          <Input label="Your role in the organisation (optional)" placeholder="e.g. Tournament Director, Club Manager" value={jobTitle}
+            onChange={e => setJobTitle(e.target.value)} onCanvas />
+        )}
+
         <div className="flex flex-col gap-2">
           <PasswordInput
             label="Password"
-            placeholder="At least 8 characters"
+            placeholder="At least 8 characters (12+ is better)"
             value={password}
             onChange={e => { setPassword(e.target.value); clear('password') }}
             error={errors.password}
@@ -237,6 +251,23 @@ export default function SignUp() {
           onCanvas
         />
 
+        <div className="space-y-3 mt-1">
+          <label className={`flex items-start gap-3 rounded-2xl px-4 py-3 cursor-pointer ${errors.terms ? 'bg-rose-50 ring-1 ring-rose-200' : 'bg-white shadow-card'}`}>
+            <input type="checkbox" checked={terms} onChange={e => { setTerms(e.target.checked); clear('terms') }} className="mt-0.5 w-4 h-4 accent-[#0c1a12]" />
+            <span className="text-[13px] text-gray-600 leading-relaxed">
+              I agree to the <span className="font-semibold text-ink">Terms of Service</span> and <span className="font-semibold text-ink">Privacy Policy</span>
+              {errors.terms && <span className="block text-rose-600 text-[12px] font-semibold mt-0.5" role="alert">{errors.terms}</span>}
+            </span>
+          </label>
+          <label className="flex items-start gap-3 rounded-2xl px-4 py-3 cursor-pointer bg-white shadow-card">
+            <input type="checkbox" checked={marketing} onChange={e => setMarketing(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#0c1a12]" />
+            <span className="text-[13px] text-gray-600 leading-relaxed">
+              {isOrganizer ? 'Send me product news and updates from Golf Tournament Platform' : 'Send me news about tournaments and offers from Golf Tournament Platform'}
+              <span className="block text-[11px] text-gray-400">Optional · unsubscribe any time</span>
+            </span>
+          </label>
+        </div>
+
         <Button type="submit" fullWidth size="lg" loading={loading} className="mt-2">
           {loading ? 'Creating account…' : 'Continue'}
         </Button>
@@ -249,10 +280,6 @@ export default function SignUp() {
         </a>
       </p>
 
-      <p className="text-center text-[11px] leading-relaxed text-gray-400 mt-10">
-        By creating an account, you agree to our<br />
-        <span className="text-ink font-semibold">Terms of Service</span> and <span className="text-ink font-semibold">Privacy Policy</span>
-      </p>
     </AuthLayout>
   )
 }

@@ -1,22 +1,19 @@
 import { useState } from 'react'
 import type { Tournament, TournamentStatus } from '../types'
-import { useDataVersion, upsertTournament, deleteTournament, setTournamentStatus, STATUS_OPTIONS } from '../store'
+import { useDataVersion, deleteTournament, setTournamentStatus, STATUS_OPTIONS } from '../store'
 import { PageHeader } from '../shell'
 import { Button, SearchInput, EmptyState } from '../components'
 import { useApp } from '../app-context'
 import { navigate } from '../router'
-import { TournamentForm } from './forms'
-import { IconPlus, IconPencil, IconTrash, NoAccess, Can } from './AdminShell'
-import { BackLink } from '../screens/TournamentDetails'
+import { IconPlus, IconPencil, IconTrash, Can } from './AdminShell'
 import { scopedTournaments, canPublish, organizerName, type AdminUser } from './access'
-import { entriesFor } from '../live'
 
 /** Statuses this admin may set: organisations under review can only keep events as drafts */
 function statusOptionsFor(actor?: AdminUser) {
   return canPublish(actor) ? STATUS_OPTIONS : STATUS_OPTIONS.filter(o => o.value === 'draft')
 }
 
-const STATUS_TONE: Record<TournamentStatus, string> = {
+export const STATUS_TONE: Record<TournamentStatus, string> = {
   'draft':               'bg-canvas text-gray-600',
   'registration-open':   'bg-emerald-50 text-emerald-700',
   'published':           'bg-amber-50 text-amber-700',
@@ -182,85 +179,6 @@ export function AdminTournaments() {
         )}
       </div>
       <p className="text-[12px] text-gray-400 mt-3">{rows.length} of {mine.length} tournaments · drafts are only visible here · changes are saved in this browser</p>
-    </div>
-  )
-}
-
-/* ───────── Create / edit ───────── */
-
-export function AdminTournamentEditor({ id }: { id: string | null }) {
-  useDataVersion()
-  const { showToast, can, adminUser } = useApp()
-  const confirmDelete = useConfirmDeleteTournament()
-  // Organisers can only open their own organisation's tournaments
-  const existing = id ? scopedTournaments(adminUser).find(t => t.id === id) : undefined
-  const publishable = canPublish(adminUser)
-
-  if (id && !existing) {
-    return (
-      <div className="bg-white rounded-[32px] shadow-card">
-        <EmptyState title="Tournament not found" subtitle="It may have been deleted."
-          action={{ label: 'Back to tournaments', onClick: () => navigate('/admin/tournaments') }} />
-      </div>
-    )
-  }
-
-  const isNew = !existing
-  const done = () => navigate('/admin/tournaments')
-  if (isNew && !can('tournaments.create')) return <NoAccess what="create tournaments" />
-  if (!can('tournaments.view')) return <NoAccess what="view tournaments" />
-  const readOnly = !isNew && !can('tournaments.edit')
-
-  return (
-    <div className="page-in max-w-[920px]">
-      <BackLink label="Tournaments" onClick={done} />
-      <PageHeader
-        eyebrow={isNew ? 'Create' : readOnly ? 'View only' : 'Edit'}
-        title={isNew ? 'New tournament' : existing.name}
-        actions={!isNew && (
-          <>
-            <Button variant="secondary" onClick={() => navigate(`/admin/tournaments/${existing.id}/live`)}>Tournament day</Button>
-            {can('tournaments.delete') && (
-              <button onClick={() => confirmDelete(existing, done)}
-                className="h-11 px-4 rounded-full bg-rose-50 text-rose-600 text-[14px] font-bold font-display flex items-center gap-2 hover:bg-rose-100">
-                <IconTrash /> Delete
-              </button>
-            )}
-          </>
-        )}
-      />
-
-      <TournamentForm
-        key={existing?.id ?? 'new'}
-        formId="tournament-form"
-        initial={existing}
-        readOnly={readOnly}
-        statusOptions={statusOptionsFor(adminUser)}
-        statusNote={publishable ? undefined : 'Your organisation is under review, so tournaments stay as drafts until it’s approved.'}
-        registered={existing ? entriesFor(existing.id).filter(e => e.status === 'registered').length || existing.players : 0}
-        onSave={t => {
-          upsertTournament(isNew ? { ...t, organizerId: adminUser?.organizationId } : t)
-          showToast(isNew ? `"${t.name}" created` : 'Tournament saved')
-          done()
-        }}
-      />
-
-      {readOnly ? (
-        <p className="mt-6 text-[13px] text-gray-500">Your role can view this tournament but not change it.</p>
-      ) : (
-      <div className="sticky bottom-4 mt-8 z-10">
-        <div className="bg-ink rounded-full shadow-float p-2 pl-6 flex items-center gap-3">
-          <p className="flex-1 text-[13px] font-medium text-white/60 truncate">
-            {!publishable ? 'Saved as a draft — publishing unlocks once your organisation is approved'
-              : isNew ? 'Drafts stay private; any other status is visible to golfers when you save' : 'Changes are visible to golfers as soon as you save'}
-          </p>
-          <button type="button" onClick={done} className="h-11 px-5 rounded-full text-white/80 text-sm font-semibold font-display hover:bg-white/10">Cancel</button>
-          <Button type="submit" form="tournament-form" className="bg-lime-400! text-ink! shadow-none!">
-            {isNew ? 'Create tournament' : 'Save changes'}
-          </Button>
-        </div>
-      </div>
-      )}
     </div>
   )
 }

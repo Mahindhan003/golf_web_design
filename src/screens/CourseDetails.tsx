@@ -9,7 +9,7 @@ import { BackLink } from './TournamentDetails'
 import { HoleMapView } from '../hole-map'
 import { dist, generateHoleMap, teeSwatch, teeTotal } from '../golf'
 
-function NineTable({ label, holes, totalLabel }: { label: string; holes: HoleData[]; totalLabel: string }) {
+function NineTable({ label, holes, totalLabel, unit }: { label: string; holes: HoleData[]; totalLabel: string; unit: string }) {
   const par = holes.reduce((s, h) => s + h.par, 0)
   const yds = holes.reduce((s, h) => s + h.yards, 0)
   return (
@@ -31,7 +31,7 @@ function NineTable({ label, holes, totalLabel }: { label: string; holes: HoleDat
               <td className="py-2.5 pr-3 font-bold text-ink rounded-tr-xl">{par}</td>
             </tr>
             <tr className="[&>td]:border-t [&>td]:border-black/[0.05]">
-              <td className="py-2.5 pl-3 text-left font-semibold text-gray-500">Yards</td>
+              <td className="py-2.5 pl-3 text-left font-semibold text-gray-500">{unit}</td>
               {holes.map(h => <td key={h.hole} className="py-2.5 text-gray-600">{h.yards}</td>)}
               <td className="py-2.5 pr-3 font-bold text-ink">{yds.toLocaleString()}</td>
             </tr>
@@ -58,7 +58,7 @@ function TeesTable({ course }: { course: Course }) {
         <table className="w-full text-left text-[14px]">
           <thead>
             <tr className="text-[12px] font-bold font-display text-gray-400">
-              <th className="py-2 pr-3">Tees</th><th className="py-2 px-3 text-right">Yards</th>
+              <th className="py-2 pr-3">Tees</th><th className="py-2 px-3 text-right">{course.distanceUnit === 'metres' ? 'Metres' : 'Yards'}</th>
               <th className="py-2 px-3 text-right">Men rating / slope</th><th className="py-2 pl-3 text-right">Women rating / slope</th>
             </tr>
           </thead>
@@ -98,7 +98,7 @@ function HoleGuide({ course }: { course: Course }) {
           <p className="text-[14px] text-gray-500">Par {hole.par}{hole.parWomen && hole.parWomen !== hole.par ? ` (women ${hole.parWomen})` : ''} · Stroke index {hole.handicap}</p>
           <ul className="mt-4 space-y-1.5 text-[14px]">
             {(course.teeSets ?? []).map(t => (
-              <li key={t.id} className="flex justify-between"><span className="inline-flex items-center gap-2 text-gray-600"><span className="w-3 h-3 rounded-full ring-1 ring-black/15" style={{ background: teeSwatch(t.color) }} />{t.name}</span><span className="font-semibold text-ink">{t.yards[index]} yds</span></li>
+              <li key={t.id} className="flex justify-between"><span className="inline-flex items-center gap-2 text-gray-600"><span className="w-3 h-3 rounded-full ring-1 ring-black/15" style={{ background: teeSwatch(t.color) }} />{t.name}</span><span className="font-semibold text-ink">{t.yards[index]} {course.distanceUnit === 'metres' ? 'm' : 'yds'}</span></li>
             ))}
           </ul>
           <p className="text-[13px] text-gray-500 mt-4">Green depth {dist(map.greenFront, map.greenBack)} yds · {map.hazards.filter(h => h.type === 'bunker').length} bunkers{map.hazards.some(h => h.type === 'water') ? ' · water in play' : ''}</p>
@@ -111,7 +111,9 @@ function HoleGuide({ course }: { course: Course }) {
 
 export default function CourseDetails({ id }: { id: string }) {
   const loading = useFakeLoad(600)
-  const course = getCourse(id)
+  // Draft courses are only visible in the admin console
+  const found = getCourse(id)
+  const course = found?.lifecycle === 'draft' ? undefined : found
   const tournaments = getTournamentsByCourse(id).filter(isPublicTournament)
 
   const goBack = () => (window.history.length > 1 ? window.history.back() : navigate('/tournaments'))
@@ -140,7 +142,7 @@ export default function CourseDetails({ id }: { id: string }) {
   const stats: [string | number, string][] = [
     [course.holes, 'Holes'],
     [course.par, 'Par'],
-    [course.yardage.toLocaleString(), 'Yards'],
+    [course.yardage.toLocaleString(), course.distanceUnit === 'metres' ? 'Metres' : 'Yards'],
     [course.rating.toFixed(1), 'Rating'],
     [course.slope, 'Slope'],
     [course.established, 'Established'],
@@ -195,8 +197,8 @@ export default function CourseDetails({ id }: { id: string }) {
           <section className="bg-white rounded-[28px] shadow-card p-6 lg:p-7">
             <h2 className="font-display font-bold text-ink text-[19px] tracking-tight mb-4">Scorecard</h2>
             <div className="space-y-3">
-              <NineTable label="Front 9" holes={front} totalLabel="OUT" />
-              {back.length > 0 && <NineTable label="Back 9" holes={back} totalLabel="IN" />}
+              <NineTable label="Front 9" holes={front} totalLabel="OUT" unit={course.distanceUnit === 'metres' ? 'Metres' : 'Yards'} />
+              {back.length > 0 && <NineTable label="Back 9" holes={back} totalLabel="IN" unit={course.distanceUnit === 'metres' ? 'Metres' : 'Yards'} />}
             </div>
           </section>
 

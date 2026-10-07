@@ -24,12 +24,16 @@ export const MOCK_PROFILE: GolferProfile = {
   dietary: ['None'],
   shirtSize: 'L',
   membership: 'Member',
+  hasHandicap: true,
+  preferredContact: 'Email',
+  emailVerified: true,
 }
 
 /** Replaces the mock profile with a newly created account (prototype only — no backend) */
 export function applyNewAccount(a: NewAccount) {
-  const [firstName, ...rest] = a.fullName.trim().split(/\s+/)
-  const lastName = rest.join(' ')
+  const [first, ...rest] = a.fullName.trim().split(/\s+/)
+  const firstName = a.firstName ?? first
+  const lastName = a.lastName ?? rest.join(' ')
   Object.assign(MOCK_PROFILE, {
     firstName,
     lastName,
@@ -37,22 +41,33 @@ export function applyNewAccount(a: NewAccount) {
     phone: a.phone.trim(),
     dob: a.dob,
     gender: a.gender,
-    country: '',
-    city: '',
+    ratingsGender: a.ratingsGender,
+    street: a.street ?? '',
+    city: a.city ?? '',
+    region: a.region ?? '',
+    postalCode: a.postalCode ?? '',
+    country: a.country,
     handicapIndex: parseFloat(a.handicapIndex) || 0,
+    hasHandicap: a.hasHandicap,
+    handicapUpdated: a.hasHandicap ? new Date().toISOString().slice(0, 10) : undefined,
     memberSince: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
     tournamentsPlayed: 0,
     wins: 0,
     avatarInitials: ((firstName?.[0] ?? '') + (lastName?.[0] ?? '')).toUpperCase() || '?',
     emergencyContactName: a.emergencyContactName.trim(),
     emergencyContactPhone: a.emergencyContactPhone.trim(),
+    emergencyContactRelationship: a.emergencyContactRelationship,
     handicapBody: a.handicapBody,
     handicapNumber: a.handicapNumber.trim(),
     homeClub: a.homeClub.trim(),
     preferredTee: a.preferredTee,
     dietary: a.dietary,
-    shirtSize: a.shirtSize,
+    dietaryNote: a.dietaryNote,
+    shirtSize: '',
     membership: a.membership,
+    preferredContact: a.preferredContact,
+    marketingOptIn: a.marketingOptIn,
+    emailVerified: a.emailVerified,
   } satisfies Partial<GolferProfile>)
 }
 
@@ -406,9 +421,24 @@ export const MOCK_TOURNAMENTS: Tournament[] = [
   },
 ]
 
+/**
+ * Fields the create/edit wizards require that the original demo records don't have
+ * (postal codes, tournament contacts). Also applied to data saved by older versions.
+ */
+const SEED_POSTAL: Record<string, string> = { c1: '30907', c2: '93923', c3: '28741' }
+export function fillSeedGaps(courses: Course[], tournaments: Tournament[]) {
+  for (const c of courses) if (!c.postalCode && SEED_POSTAL[c.id]) c.postalCode = SEED_POSTAL[c.id]
+  for (const t of tournaments) {
+    const site = courses.find(c => c.id === t.courseId)?.website
+    if (!t.contactPerson) t.contactPerson = t.officials?.[0]?.name ?? 'Tournament office'
+    if (!t.contactEmail && site) t.contactEmail = `events@${site.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}`
+  }
+}
+
 // Fill structured set-up (tee sets, hole maps, rounds, scoring, fees…) for every seed record
 MOCK_COURSES.splice(0, MOCK_COURSES.length, ...MOCK_COURSES.map(withCourseDefaults))
 MOCK_TOURNAMENTS.splice(0, MOCK_TOURNAMENTS.length, ...MOCK_TOURNAMENTS.map(withTournamentDefaults))
+fillSeedGaps(MOCK_COURSES, MOCK_TOURNAMENTS)
 
 export function getCourse(id: string): Course | undefined {
   return MOCK_COURSES.find(c => c.id === id)

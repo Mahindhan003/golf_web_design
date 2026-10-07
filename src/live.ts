@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { Course, HoleData, Point, Tournament } from './types'
 import { MOCK_PROFILE, MOCK_TOURNAMENTS, getCourse } from './data'
+import { ratingsGenderOf } from './account-rules'
 import { playingHandicap, stablefordPoints, strokesOnHole, teeTimeFor, uid } from './golf'
 import { upsertTournament } from './store'
 
@@ -110,7 +111,7 @@ function seedField(t: Tournament, count: number, includeMe: boolean) {
       tournamentId: t.id,
       name: `${MOCK_PROFILE.firstName} ${MOCK_PROFILE.lastName}`,
       handicapIndex: MOCK_PROFILE.handicapIndex,
-      gender: MOCK_PROFILE.gender === 'Female' ? 'women' : 'men',
+      gender: ratingsGenderOf(MOCK_PROFILE),
       divisionId: division(MOCK_PROFILE.handicapIndex),
       status: 'registered',
       isMe: true,
@@ -173,7 +174,7 @@ export function registerMe(t: Tournament, divisionId: string, waitlist = false) 
       tournamentId: t.id,
       name: `${MOCK_PROFILE.firstName} ${MOCK_PROFILE.lastName}`,
       handicapIndex: MOCK_PROFILE.handicapIndex,
-      gender: MOCK_PROFILE.gender === 'Female' ? 'women' : 'men',
+      gender: ratingsGenderOf(MOCK_PROFILE),
       divisionId,
       status: waitlist ? 'waitlist' : 'registered',
       isMe: true,

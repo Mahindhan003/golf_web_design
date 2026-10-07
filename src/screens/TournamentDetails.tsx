@@ -5,6 +5,7 @@ import {
   IconCalendar, IconClock, IconCourse, IconUsers, IconCheckCircle,
 } from '../components'
 import { getTournament, getCourse, MOCK_PROFILE } from '../data'
+import { ratingsGenderOf } from '../account-rules'
 import { isPublicTournament, organizerName } from '../admin/access'
 import { useApp } from '../app-context'
 import { navigate } from '../router'
@@ -13,6 +14,7 @@ import { useDataVersion } from '../store'
 import { entriesFor, groupOf, myEntry, registerMe, useLiveVersion, withdrawMe } from '../live'
 import {
   TIE_BREAK_OPTIONS, isoDate, isoLocalDateTime, formatClock, formatDateTime, formatDay, formatMoney, teeSwatch, teeTotal,
+  divisionForGolfer, feeUnit, withTax,
 } from '../golf'
 
 export function BackLink({ label, onClick }: { label: string; onClick: () => void }) {
@@ -63,8 +65,8 @@ function eligibilityProblem(t: Tournament): string | null {
   if (!e) return null
   if (e.maxHandicap !== undefined && hcp > e.maxHandicap) return `Handicap index ${e.maxHandicap} or lower is required (yours is ${hcp.toFixed(1)}).`
   if (e.minHandicap !== undefined && hcp < e.minHandicap) return `Handicap index ${e.minHandicap} or higher is required.`
-  if (e.gender === 'men' && MOCK_PROFILE.gender === 'Female') return 'This event is for men.'
-  if (e.gender === 'women' && MOCK_PROFILE.gender !== 'Female') return 'This event is for women.'
+  if (e.gender === 'men' && ratingsGenderOf(MOCK_PROFILE) === 'women') return 'This event is for men.'
+  if (e.gender === 'women' && ratingsGenderOf(MOCK_PROFILE) !== 'women') return 'This event is for women.'
   if (e.officialHandicapRequired && !MOCK_PROFILE.handicapBody) return 'An official handicap is required.'
   if (e.membersOnly && MOCK_PROFILE.membership !== 'Member') return 'This event is for members of the host club.'
   if (e.minAge !== undefined || e.maxAge !== undefined) {
@@ -75,12 +77,14 @@ function eligibilityProblem(t: Tournament): string | null {
   return null
 }
 
-const divisionFor = (divisions: Division[] = [], hcp: number) => divisions.find(d => hcp >= d.minHandicap && hcp <= d.maxHandicap)
+const myAge = () => (MOCK_PROFILE.dob ? Math.floor((Date.now() - new Date(MOCK_PROFILE.dob).getTime()) / 31_557_600_000) : undefined)
+const divisionFor = (divisions: Division[] = [], hcp: number) =>
+  divisionForGolfer(divisions, { index: hcp, gender: ratingsGenderOf(MOCK_PROFILE), age: myAge() })
 
 export default function TournamentDetails({ id }: { id: string }) {
   useDataVersion()
   useLiveVersion()
-  const { showToast, showDialog } = useApp()
+  const { showToast, showDialog, touchProfile } = useApp()
   const loading = useFakeLoad(600)
   // Drafts and events from organisers awaiting approval aren't public
   const found = getTournament(id)
@@ -139,11 +143,21 @@ export default function TournamentDetails({ id }: { id: string }) {
     : isOpen ? 'open' : isComingSoon ? 'coming-soon' : 'closed'
 
   function register() {
+    if (MOCK_PROFILE.emailVerified === false) {
+      showDialog({
+        title: 'Verify your email to register',
+        message: `We sent a verification link to ${MOCK_PROFILE.email}. Verify it, then register for ${t!.name}.`,
+        confirmLabel: 'Open verification link (demo)',
+        cancelLabel: 'Later',
+        onConfirm: () => { MOCK_PROFILE.emailVerified = true; touchProfile(); showToast('Email verified — you can register now') },
+      })
+      return
+    }
     if (!myDivision) { showToast('No division matches your handicap', 'error'); return }
     const full = spotsLeft <= 0
     showDialog({
       title: full ? 'Join the waiting list?' : 'Confirm your entry',
-      message: `${t!.name} · ${myDivision.name} division · ${formatMoney(priceNow, fees.currency)}${fees.perTeam ? ' per team' : ''}. ${full ? "You'll get a spot if someone withdraws." : `You can withdraw until ${formatDateTime(reg.withdrawBy)}.`}`,
+      message: `${t!.name} · ${myDivision.name} division · ${formatMoney(withTax(priceNow, fees), fees.currency)}${fees.taxRate ? ' incl. tax' : ''}${feeUnit(fees) ? ` ${feeUnit(fees)}` : ''}. ${full ? "You'll get a spot if someone withdraws." : `You can withdraw until ${formatDateTime(reg.withdrawBy)}.`}`,
       confirmLabel: full ? 'Join waitlist' : 'Register',
       onConfirm: () => {
         registerMe(t!, myDivision.id, full)
@@ -270,7 +284,7 @@ export default function TournamentDetails({ id }: { id: string }) {
                     <span className="w-4 h-4 rounded-full ring-1 ring-black/15 flex-shrink-0" style={{ background: teeSwatch(tee?.color ?? '') }} />
                     <span className="flex-1 min-w-0">
                       <span className="block font-display font-bold text-ink text-[14px]">{d.name}{mine && ' · your division'}</span>
-                      <span className="block text-[12px] text-gray-500">Handicap {d.minHandicap} to {d.maxHandicap} · {tee ? `${tee.name} tees, ${teeTotal(tee).toLocaleString()} yds` : 'Tees TBC'}</span>
+                      <span className="block text-[12px] text-gray-500">Handicap {d.minHandicap} to {d.maxHandicap}{d.gender && d.gender !== 'any' ? ` · ${d.gender === 'men' ? 'Men' : 'Women'}` : ''}{d.minAge !== undefined || d.maxAge !== undefined ? ` · Age ${d.minAge ?? 'any'}–${d.maxAge ?? 'any'}` : ''} · {tee ? `${tee.name} tees, ${teeTotal(tee).toLocaleString()} yds` : 'Tees TBC'}</span>
                     </span>
                   </div>
                 )
@@ -338,8 +352,9 @@ export default function TournamentDetails({ id }: { id: string }) {
           <div>
             <p className="text-[13px] text-gray-500 font-semibold font-display">{earlyBird ? 'Early-bird entry' : 'Entry fee'}</p>
             <p className="font-display font-extrabold text-ink text-[34px] leading-tight tracking-tight">
-              {formatMoney(priceNow, fees.currency)}<span className="text-[15px] text-gray-500 font-semibold">{fees.perTeam ? ' / team' : ''}</span>
+              {fees.amount === 0 ? 'Free' : formatMoney(priceNow, fees.currency)}<span className="text-[15px] text-gray-500 font-semibold">{feeUnit(fees) ? ` ${feeUnit(fees)}` : ''}</span>
             </p>
+            {fees.taxRate !== undefined && priceNow > 0 && <p className="text-[12px] text-gray-500">+ {fees.taxRate}% tax = {formatMoney(withTax(priceNow, fees), fees.currency)}</p>}
             {(fees.memberAmount !== undefined && fees.memberAmount !== fees.amount) && <p className="text-[12px] text-gray-500">Members {formatMoney(fees.memberAmount, fees.currency)} · Guests {formatMoney(fees.amount, fees.currency)}</p>}
             {earlyBird && <p className="text-[12px] text-pine-600 font-semibold">Until {formatDay(fees.earlyBirdUntil!)}, then {formatMoney(fees.amount, fees.currency)}</p>}
             {!!fees.includes.length && <p className="text-[12px] text-gray-500 mt-1">Includes {fees.includes.join(', ').toLowerCase()}</p>}

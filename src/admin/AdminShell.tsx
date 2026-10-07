@@ -5,7 +5,7 @@ import { Wordmark } from '../shell'
 import { Button, IconSignOut } from '../components'
 import { resetDemoData } from '../store'
 import { resetLiveData } from '../live'
-import { resetAccessData, type OrgStatus } from './access'
+import { resetAccessData, verifyOrganizationEmail, type OrgStatus } from './access'
 import { navigate } from '../router'
 
 /* ───────── Icons (currentColor so the nav can tint them) ───────── */
@@ -152,16 +152,35 @@ function useResetDemo() {
   })
 }
 
-/** Shown across the console while an organiser's application is under review */
+/** Shown across the console until an organiser's email is verified and their organisation approved */
 function OrgStatusBanner() {
-  const { adminOrg } = useApp()
+  const { adminOrg, adminUser, showToast } = useApp()
   if (!adminOrg || adminOrg.status === 'approved') return null
+  const unverified = !adminOrg.emailVerified && adminOrg.status === 'pending' && adminOrg.ownerUserId === adminUser?.id
   return (
-    <div className="mb-6 flex items-start gap-3 bg-amber-50 text-amber-800 rounded-2xl px-5 py-4 page-in">
-      <span className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0" />
-      <div className="text-[14px] leading-relaxed">
-        <p className="font-bold font-display">{adminOrg.name} is under review</p>
-        <p>You can set up your profile, invite your team and create <span className="font-semibold">draft</span> tournaments. Publishing unlocks once the platform team approves your organisation — usually within 1–2 working days.</p>
+    <div className="mb-6 space-y-3 page-in">
+      {unverified && (
+        <div className="flex flex-wrap items-start gap-3 bg-rose-50 text-rose-800 rounded-2xl px-5 py-4" role="status">
+          <span className="w-2 h-2 rounded-full bg-rose-500 mt-2 flex-shrink-0" />
+          <div className="flex-1 min-w-[240px] text-[14px] leading-relaxed">
+            <p className="font-bold font-display">Verify your email</p>
+            <p>We sent a link to <span className="font-semibold">{adminUser?.email}</span>. Our team can approve {adminOrg.name} once you've verified it. The link expires after 24 hours.</p>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => showToast(`Verification link sent again to ${adminUser?.email}`, 'info')}
+              className="h-9 px-4 rounded-full bg-white text-rose-700 text-[13px] font-bold font-display hover:bg-rose-100">Resend link</button>
+            <button type="button" onClick={() => { verifyOrganizationEmail(adminOrg.id); showToast('Email verified') }}
+              title="Prototype only: stands in for clicking the link in the email"
+              className="h-9 px-4 rounded-full bg-ink text-white text-[13px] font-bold font-display hover:bg-pine-900">Open verification link (demo)</button>
+          </div>
+        </div>
+      )}
+      <div className="flex items-start gap-3 bg-amber-50 text-amber-800 rounded-2xl px-5 py-4">
+        <span className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0" />
+        <div className="text-[14px] leading-relaxed">
+          <p className="font-bold font-display">{adminOrg.name} is under review</p>
+          <p>Meanwhile you can complete your organisation profile and create <span className="font-semibold">draft</span> tournaments. Publishing, taking registrations and inviting your team unlock once the platform team approves you — usually within 2 business days.</p>
+        </div>
       </div>
     </div>
   )

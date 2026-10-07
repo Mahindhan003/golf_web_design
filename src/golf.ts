@@ -230,6 +230,21 @@ export function summaryFields(t: Tournament) {
   }
 }
 
+/** "per team" / "per group" / "" for fees */
+export const feeUnit = (f: TournamentFees) =>
+  f.type === 'per-group' ? 'per group' : f.type === 'per-team' || f.perTeam ? 'per team' : ''
+
+/** Fee plus tax / HST, rounded to cents */
+export const withTax = (amount: number, f: TournamentFees) => (f.taxRate ? Math.round(amount * (100 + f.taxRate)) / 100 : amount)
+
+/** The division a golfer is placed in: handicap range, then gender and age when the division sets them */
+export function divisionForGolfer(divisions: Division[] = [], golfer: { index: number; gender?: 'men' | 'women'; age?: number }) {
+  return divisions.find(d =>
+    golfer.index >= d.minHandicap && golfer.index <= d.maxHandicap &&
+    (!d.gender || d.gender === 'any' || !golfer.gender || d.gender === golfer.gender) &&
+    (golfer.age === undefined || ((d.minAge ?? 0) <= golfer.age && golfer.age <= (d.maxAge ?? 200))))
+}
+
 /* ───────── Handicaps and scoring ───────── */
 
 /** WHS course handicap × allowance, rounded. */

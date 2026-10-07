@@ -223,8 +223,15 @@ export function AdminUsers() {
       <PageHeader
         eyebrow={isOrg ? adminOrg?.name : 'Administration'}
         title={isOrg ? 'Team' : 'Admin users'}
-        actions={<Can perm="users.create"><Button onClick={() => setEditing('new')}><IconPlus /> {isOrg ? 'Add team member' : 'Add admin user'}</Button></Can>}
+        actions={<Can perm="users.create">
+          <span title={isOrg && adminOrg?.status !== 'approved' ? 'You can invite your team once your organisation is approved' : undefined}>
+            <Button onClick={() => setEditing('new')} disabled={isOrg && adminOrg?.status !== 'approved'}><IconPlus /> {isOrg ? 'Add team member' : 'Add admin user'}</Button>
+          </span>
+        </Can>}
       />
+      {isOrg && adminOrg?.status !== 'approved' && (
+        <p className="-mt-4 mb-6 text-[13px] text-amber-800 bg-amber-50 rounded-2xl px-4 py-3 max-w-2xl">You can invite your team once {adminOrg?.name} is approved.</p>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {stat(isOrg ? 'Team members' : 'Admin users', all.length)}

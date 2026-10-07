@@ -38,7 +38,8 @@ export default function SignIn() {
       // Platform admins and organisers → admin console; everyone else → golfer home
       const admin = authenticate(email, password)
       if (admin.ok) return signInAdmin(admin.user.id)
-      if (admin.reason !== 'invalid') {
+      if (admin.reason === 'invalid') return setState('error')
+      if (admin.reason !== 'unknown') {
         // A real admin/organiser account that can't get in — explain why instead of treating them as a golfer
         setAccountMsg(authFailureMessage(admin))
         return setState('account')

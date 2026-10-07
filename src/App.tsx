@@ -22,9 +22,11 @@ import { AdminRoles, AdminRoleEditor } from './admin/ManageRoles'
 import { AdminUsers } from './admin/ManageUsers'
 import { AdminOrganisation, AdminOrganizers } from './admin/Organizations'
 import AdminDashboard from './admin/Dashboard'
-import { AdminTournaments, AdminTournamentEditor } from './admin/ManageTournaments'
+import { AdminTournaments } from './admin/ManageTournaments'
+import { TournamentWizard } from './admin/TournamentWizard'
 import { AdminTournamentLive } from './admin/LiveControl'
-import { AdminCourses, AdminCourseEditor } from './admin/ManageCourses'
+import { AdminCourses } from './admin/ManageCourses'
+import { CourseWizard } from './admin/CourseWizard'
 
 const AUTH_ROUTES: Route['name'][] = ['signin', 'signup', 'setup', 'organizer-setup']
 const isAdminRoute = (r: Route) => r.name.startsWith('admin')
@@ -66,10 +68,10 @@ function Routes() {
       switch (route.name) {
         case 'admin':                 return can('dashboard.view') ? <AdminDashboard key={key} /> : <NoAccess what="view the dashboard" />
         case 'admin-tournaments':     return can('tournaments.view') ? <AdminTournaments key={key} /> : <NoAccess what="view tournaments" />
-        case 'admin-tournament-edit': return <AdminTournamentEditor key={key} id={route.id} />
+        case 'admin-tournament-edit': return <TournamentWizard key={key} id={route.id} />
         case 'admin-tournament-live': return <AdminTournamentLive key={key} id={route.id} />
         case 'admin-courses':         return can('courses.view') ? <AdminCourses key={key} /> : <NoAccess what="view courses" />
-        case 'admin-course-edit':     return <AdminCourseEditor key={key} id={route.id} />
+        case 'admin-course-edit':     return <CourseWizard key={key} id={route.id} />
         case 'admin-roles':           return <AdminRoles key={key} />
         case 'admin-role-edit':       return <AdminRoleEditor key={key} id={route.id} />
         case 'admin-users':           return <AdminUsers key={key} />

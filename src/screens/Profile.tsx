@@ -1,3 +1,4 @@
+import { handicapText, headlineStat } from '../account-rules'
 import type { ReactNode } from 'react'
 import { Avatar, Button } from '../components'
 import { MOCK_PROFILE } from '../data'
@@ -73,7 +74,7 @@ export default function Profile() {
 
             <div className="grid grid-cols-3 gap-2 mt-6">
               <div className="bg-lime-400 rounded-2xl p-3">
-                <p className="font-display font-extrabold text-ink text-[20px] leading-none tracking-tight">{p.handicapIndex.toFixed(1)}</p>
+                <p className="font-display font-extrabold text-ink text-[20px] leading-none tracking-tight">{handicapText(p)}</p>
                 <p className="text-pine-800 text-[11px] font-semibold mt-1.5">Handicap</p>
               </div>
               <div className="bg-white/[0.08] rounded-2xl p-3">
@@ -81,8 +82,8 @@ export default function Profile() {
                 <p className="text-white/55 text-[11px] font-semibold mt-1.5">Played</p>
               </div>
               <div className="bg-white/[0.08] rounded-2xl p-3">
-                <p className="font-display font-extrabold text-white text-[20px] leading-none tracking-tight">{p.wins}</p>
-                <p className="text-white/55 text-[11px] font-semibold mt-1.5">Wins</p>
+                <p className="font-display font-extrabold text-white text-[20px] leading-none tracking-tight">{headlineStat(p).value}</p>
+                <p className="text-white/55 text-[11px] font-semibold mt-1.5">{headlineStat(p).label}</p>
               </div>
             </div>
 
@@ -111,30 +112,33 @@ export default function Profile() {
             <Row label="Phone" value={p.phone} />
             <Row label="Date of birth" value={dob} />
             <Row label="Gender" value={p.gender} />
+            {(p.street || p.city || p.postalCode) && <Row label="Address" value={[p.street, p.city, p.region, p.postalCode].filter(Boolean).join(', ')} />}
             {p.country && <Row label="Country" value={p.country} />}
-            {p.city && <Row label="City" value={p.city} />}
+            <Row label="Email verified" value={p.emailVerified === false ? 'Not yet — check your inbox' : 'Yes'} />
           </Group>
 
           <Group title="Golfer information">
-            <Row label="Handicap index" value={`${p.handicapIndex.toFixed(1)} (WHS)`} />
-            <Row label="Issuing body" value={p.handicapBody} />
+            <Row label="Handicap index" value={p.hasHandicap === false ? 'Not yet' : `${handicapText(p)} (WHS)`} />
+            {p.handicapBody && <Row label="Issuing body" value={p.handicapBody} />}
             {p.handicapNumber && <Row label="Member number" value={p.handicapNumber} />}
             {p.homeClub && <Row label="Home club" value={p.homeClub} />}
-            <Row label="Preferred tee" value={p.preferredTee} />
+            {p.preferredTee && <Row label="Preferred tee" value={p.preferredTee} />}
             <Row label="Status" value={p.membership} />
             <Row label="Member since" value={p.memberSince} />
           </Group>
 
           <Group title="Event preferences">
-            <Row label="Dietary" value={p.dietary.join(', ')} />
-            <Row label="Shirt size" value={p.shirtSize} />
+            <Row label="Preferred contact" value={p.preferredContact ?? 'Email'} />
+            <Row label="Dietary" value={[...p.dietary, p.dietaryNote].filter(Boolean).join(', ') || 'None'} />
+            {p.shirtSize && <Row label="Shirt size" value={p.shirtSize} />}
             <Row label="Tournaments played" value={String(p.tournamentsPlayed)} />
-            <Row label="Tournament wins" value={String(p.wins)} />
+            <Row label={headlineStat(p).label} value={headlineStat(p).value} />
           </Group>
 
           <Group title="Emergency contact">
             <Row label="Name" value={p.emergencyContactName} />
             <Row label="Phone" value={p.emergencyContactPhone} />
+            {p.emergencyContactRelationship && <Row label="Relationship" value={p.emergencyContactRelationship} />}
           </Group>
         </div>
       </div>
