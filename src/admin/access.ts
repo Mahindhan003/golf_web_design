@@ -273,6 +273,8 @@ const DEFAULT_USERS: AdminUser[] = [
   // Approved organisation
   { id: 'u-savannah', name: 'Grace Whitfield', email: 'owner@savannahgolf.com', password: 'savannah', roleId: ORGANIZER_ROLE_ID, organizationId: 'o-savannah', active: true },
   { id: 'u-savannah-staff', name: 'Leo Park', email: 'leo@savannahgolf.com', password: 'leo', roleId: 'o-savannah-event-staff', organizationId: 'o-savannah', active: true },
+  // Runs the live club championship (t8), with a marshal and an official on duty
+  { id: 'u-augusta', name: 'Dana Whitfield', email: 'dana@augustapines.com', password: 'augusta', roleId: ORGANIZER_ROLE_ID, organizationId: 'o-augusta', active: true, jobTitle: 'Tournament Director' },
   // Pending organisation
   { id: 'u-coastal', name: 'Nadia Brooks', email: 'hello@coastalcharity.org', password: 'coastal', roleId: ORGANIZER_ROLE_ID, organizationId: 'o-coastal', active: true },
 ]
@@ -285,6 +287,14 @@ const DEFAULT_ORGS: Organization[] = [
     eventsPerYear: '11–25', fieldSize: '100–150', emailVerified: true,
     decisions: [{ status: 'approved', byUserId: 'u-admin', at: '2026-03-03T09:00:00.000Z' }],
     status: 'approved', ownerUserId: 'u-savannah', createdAt: '2026-03-02T10:00:00.000Z',
+  },
+  {
+    id: 'o-augusta', name: 'Augusta Pines Golf Club', type: 'Golf club',
+    email: 'events@augustapines.com', phone: '+1 (706) 555-0100', website: 'augustapinesgolf.com',
+    street: '1200 Pine Valley Rd', city: 'Augusta', region: 'Georgia', postalCode: '30907', country: 'United States',
+    homeCourseId: 'c1', eventsPerYear: '6–10', fieldSize: '50–100', emailVerified: true,
+    decisions: [{ status: 'approved', byUserId: 'u-admin', at: '2026-04-11T09:00:00.000Z' }],
+    status: 'approved', ownerUserId: 'u-augusta', createdAt: '2026-04-10T10:00:00.000Z',
   },
   {
     id: 'o-coastal', name: 'Coastal Charity Golf', type: 'Charity / non-profit',
@@ -313,6 +323,8 @@ const listeners = new Set<() => void>()
     const saved = JSON.parse(raw) as { roles?: Role[]; users?: AdminUser[]; orgs?: Organization[] }
     if (Array.isArray(saved.roles) && saved.roles.some(r => r.id === SUPER_ADMIN_ROLE_ID) && saved.roles.some(r => r.id === ORGANIZER_ROLE_ID)) roles = saved.roles
     if (Array.isArray(saved.users) && saved.users.some(u => u.system)) users = saved.users
+    // Demo accounts added after this browser saved its data
+    for (const u of DEFAULT_USERS) if (!users.some(x => x.id === u.id)) users.push(structuredClone(u))
     if (Array.isArray(saved.orgs)) orgs = saved.orgs.map(o => ({
       ...o,
       type: LEGACY_TYPES[o.type] ?? o.type,
@@ -320,6 +332,7 @@ const listeners = new Set<() => void>()
       // Organisations decided before verification existed count as verified
       emailVerified: o.emailVerified ?? o.status !== 'pending',
     }))
+    for (const o of DEFAULT_ORGS) if (!orgs.some(x => x.id === o.id)) orgs.push(structuredClone(o))
   } catch {
     /* corrupt or unavailable storage — keep defaults */
   }

@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { Division, Tournament } from '../types'
 import {
   Button, StatusBadge, GlassChip, InfoTile, SpotsBar, EmptyState,
@@ -11,11 +11,12 @@ import { useApp } from '../app-context'
 import { navigate } from '../router'
 import { useFakeLoad } from '../shell'
 import { useDataVersion } from '../store'
-import { entriesFor, groupOf, myEntry, registerMe, useLiveVersion, withdrawMe } from '../live'
+import { entriesFor, groupOf, myEntry, registerMe, registrantsFor, useLiveVersion, withdrawMe } from '../live'
 import {
   TIE_BREAK_OPTIONS, isoDate, isoLocalDateTime, formatClock, formatDateTime, formatDay, formatMoney, teeSwatch, teeTotal,
   divisionForGolfer, feeUnit, withTax,
 } from '../golf'
+import { PaymentSheet } from '../payments'
 
 export function BackLink({ label, onClick }: { label: string; onClick: () => void }) {
   return (
@@ -37,6 +38,64 @@ function Notice({ tone, title, body }: { tone: 'rose' | 'amber' | 'gray' | 'lime
       <p className="text-sm font-bold font-display">{title}</p>
       <p className="text-[13px] opacity-80 mt-0.5 leading-relaxed">{body}</p>
     </div>
+  )
+}
+
+/**
+ * Who's playing (client, 17 Oct): golfers registered for the tournament can see the registrant list —
+ * name, division and handicap only, never contact details. Everyone else sees just the count.
+ */
+function WhosPlaying({ t, players, isRegistered }: { t: Tournament; players: number; isRegistered: boolean }) {
+  const [q, setQ] = useState('')
+  const [all, setAll] = useState(false)
+  const list = registrantsFor(t.id)
+  const shown = list.filter(e => !q.trim() || e.name.toLowerCase().includes(q.trim().toLowerCase()))
+  const division = (id: string) => t.divisions?.find(d => d.id === id)?.name ?? ''
+  return (
+    <section id="whos-playing" className="bg-white rounded-[28px] shadow-card p-6 lg:p-7">
+      <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
+        <div>
+          <h2 className="font-display font-bold text-ink text-[19px] tracking-tight">Who's playing</h2>
+          <p className="text-[13px] text-gray-500 mt-0.5">{players} registered{players > list.length && isRegistered ? ` · ${list.length} shown in the prototype` : ''}</p>
+        </div>
+        {isRegistered && list.length > 8 && (
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Find a player" aria-label="Find a player"
+            className="h-10 w-[220px] rounded-full bg-canvas px-4 text-[14px] border border-transparent focus:border-pine-400 focus:outline-none" />
+        )}
+      </div>
+      {!isRegistered ? (
+        <div className="flex items-center gap-3 rounded-2xl bg-canvas px-4 py-3.5">
+          <span className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-gray-400 flex-shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5" stroke="currentColor" strokeWidth="1.8"/><path d="M8 10.5V7.5a4 4 0 018 0v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+          </span>
+          <p className="text-[14px] text-gray-600">Registered golfers can see who else is playing. Register to see the list.</p>
+        </div>
+      ) : (
+        <>
+          <ul className="grid sm:grid-cols-2 gap-x-6">
+            {(all || q ? shown : shown.slice(0, 10)).map(e => (
+              <li key={e.id} className="flex items-center gap-3 py-2.5 border-b border-black/[0.05]">
+                <span className={`w-9 h-9 rounded-full flex items-center justify-center font-display font-extrabold text-[12px] flex-shrink-0 ${e.isMe ? 'bg-lime-400 text-ink' : 'bg-canvas text-ink'}`}>
+                  {e.name.split(/\s+/).map(w => w[0]).slice(0, 2).join('')}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[14px] font-semibold text-ink truncate">{e.name}{e.isMe && <span className="ml-1.5 text-[11px] font-bold text-pine-700">You</span>}</span>
+                  <span className="block text-[12px] text-gray-500 truncate">{division(e.divisionId)}</span>
+                </span>
+                <span className="text-[13px] font-semibold text-gray-600">{e.handicapIndex < 0 ? `+${Math.abs(e.handicapIndex).toFixed(1)}` : e.handicapIndex.toFixed(1)}</span>
+              </li>
+            ))}
+          </ul>
+          {shown.length === 0 && <p className="text-[14px] text-gray-500 py-4">No player matches "{q}".</p>}
+          {!q && shown.length > 10 && (
+            <button onClick={() => setAll(!all)} className="mt-3 text-[13px] font-bold font-display text-ink underline underline-offset-4 decoration-lime-500 decoration-2">
+              {all ? 'Show fewer' : `Show all ${shown.length}`}
+            </button>
+          )}
+          <p className="text-[12px] text-gray-400 mt-3">Only players in this tournament see this list. Contact details are never shown.</p>
+        </>
+      )}
+    </section>
   )
 }
 
@@ -82,6 +141,7 @@ const divisionFor = (divisions: Division[] = [], hcp: number) =>
   divisionForGolfer(divisions, { index: hcp, gender: ratingsGenderOf(MOCK_PROFILE), age: myAge() })
 
 export default function TournamentDetails({ id }: { id: string }) {
+  const [paying, setPaying] = useState(false)
   useDataVersion()
   useLiveVersion()
   const { showToast, showDialog, touchProfile } = useApp()
@@ -154,15 +214,15 @@ export default function TournamentDetails({ id }: { id: string }) {
       return
     }
     if (!myDivision) { showToast('No division matches your handicap', 'error'); return }
-    const full = spotsLeft <= 0
+    // No waiting list (client answer T-04): a full field simply closes
+    if (spotsLeft <= 0) { showToast('The field is full — contact the organiser', 'info'); return }
+    // Online payment from the first release (client answer T-06)
+    if (withTax(priceNow, fees) > 0) { setPaying(true); return }
     showDialog({
-      title: full ? 'Join the waiting list?' : 'Confirm your entry',
-      message: `${t!.name} · ${myDivision.name} division · ${formatMoney(withTax(priceNow, fees), fees.currency)}${fees.taxRate ? ' incl. tax' : ''}${feeUnit(fees) ? ` ${feeUnit(fees)}` : ''}. ${full ? "You'll get a spot if someone withdraws." : `You can withdraw until ${formatDateTime(reg.withdrawBy)}.`}`,
-      confirmLabel: full ? 'Join waitlist' : 'Register',
-      onConfirm: () => {
-        registerMe(t!, myDivision.id, full)
-        showToast(full ? "You're on the waiting list" : `You're registered for ${t!.name}!`)
-      },
+      title: 'Confirm your entry',
+      message: `${t!.name} · ${myDivision.name} division · free entry. You can withdraw until ${formatDateTime(reg.withdrawBy)}.`,
+      confirmLabel: 'Register',
+      onConfirm: () => { registerMe(t!, myDivision.id, false, 'free'); showToast(`You're registered for ${t!.name}!`) },
     })
   }
 
@@ -186,8 +246,8 @@ export default function TournamentDetails({ id }: { id: string }) {
     : isClosed || !windowOpen ? <Button variant="ghost" disabled fullWidth>{now < reg.opensAt ? `Opens ${formatDateTime(reg.opensAt)}` : 'Registration closed'}</Button>
     : isComingSoon ? <Button fullWidth onClick={() => showToast("You'll be notified when registration opens")}>Notify me</Button>
     : problem ? <Button variant="ghost" disabled fullWidth>Not eligible</Button>
-    : spotsLeft <= 0 && !reg.waitlist ? <Button variant="ghost" disabled fullWidth>Fully booked</Button>
-    : <Button fullWidth onClick={register}>{spotsLeft <= 0 ? 'Join waiting list' : 'Register now'}</Button>
+    : spotsLeft <= 0 ? <Button variant="ghost" disabled fullWidth>Field is full</Button>
+    : <Button fullWidth onClick={register}>{withTax(priceNow, fees) > 0 ? `Register & pay ${formatMoney(withTax(priceNow, fees), fees.currency)}` : 'Register now'}</Button>
 
   const scoring = t.scoring!
   const sheet = t.teeSheet!
@@ -336,12 +396,14 @@ export default function TournamentDetails({ id }: { id: string }) {
             </Card>
           )}
 
+          {!isCancelled && <WhosPlaying t={t} players={players} isRegistered={isRegistered} />}
+
           {(t.contactEmail || t.contactPhone || !!t.officials?.length) && (
             <Card title="Contacts">
               <dl className="divide-y divide-black/[0.05] -my-2.5">
                 {t.contactEmail && <Row label="Email" value={<a className="underline decoration-lime-500 underline-offset-4" href={`mailto:${t.contactEmail}`}>{t.contactEmail}</a>} />}
                 {t.contactPhone && <Row label="Phone" value={t.contactPhone} />}
-                {t.officials?.map(o => <Row key={o.name} label={o.role} value={`${o.name}${o.phone ? ` · ${o.phone}` : ''}`} />)}
+                {t.officials?.filter(o => o.name.trim()).map(o => <Row key={o.name} label={o.role} value={`${o.name}${o.phone ? ` · ${o.phone}` : ''}`} />)}
               </dl>
             </Card>
           )}
@@ -392,11 +454,19 @@ export default function TournamentDetails({ id }: { id: string }) {
             <div className="flex justify-between gap-4"><span className="text-gray-500">Registration opens</span><span className="font-semibold text-ink text-right">{formatDateTime(reg.opensAt)}</span></div>
             <div className="flex justify-between gap-4"><span className="text-gray-500">Closes</span><span className="font-semibold text-ink text-right">{formatDateTime(reg.closesAt)}</span></div>
             <div className="flex justify-between gap-4"><span className="text-gray-500">Free withdrawal until</span><span className="font-semibold text-ink text-right">{formatDateTime(reg.withdrawBy)}</span></div>
-            {reg.waitlist && <div className="flex justify-between gap-4"><span className="text-gray-500">Waiting list</span><span className="font-semibold text-ink">When full</span></div>}
             <p className="text-[12px] text-gray-400 leading-relaxed pt-1">{reg.refundPolicy}</p>
           </div>
         </aside>
       </div>
+      {paying && myDivision && (
+        <PaymentSheet title={`Enter ${t.name}`} currency={fees.currency} total={withTax(priceNow, fees)} onClose={() => setPaying(false)}
+          lines={[
+            ['Division', myDivision.name],
+            [earlyBird ? 'Entry (early bird)' : MOCK_PROFILE.membership === 'Member' && fees.memberAmount !== undefined ? 'Entry (member)' : 'Entry', formatMoney(priceNow, fees.currency)],
+            ...(fees.taxRate ? [[`Tax (${fees.taxRate}%)`, formatMoney(withTax(priceNow, fees) - priceNow, fees.currency)] as [string, string]] : []),
+          ]}
+          onPaid={() => { registerMe(t, myDivision.id, false, 'paid'); showToast(`Paid ${formatMoney(withTax(priceNow, fees), fees.currency)} — you're registered for ${t.name}!`) }} />
+      )}
     </div>
   )
 }

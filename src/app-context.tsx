@@ -6,6 +6,7 @@ import {
   getUser, getRole, getOrganization, userPermissions, useAccessVersion,
   type AdminUser, type Role as AdminRole, type Organization,
 } from './admin/access'
+import { assignmentsFor, type Actor } from './ops'
 
 /** First admin page this set of permissions can open */
 export function adminHomePath(perms: string[]) {
@@ -36,7 +37,8 @@ export interface AccountBasics {
   marketingOptIn?: boolean
 }
 
-export type Role = 'golfer' | 'admin'
+/** golfer · admin (platform staff and organisers share the console) · staff (marshals and tournament officials, per tournament) */
+export type Role = 'golfer' | 'admin' | 'staff'
 
 interface AppState {
   isAuthenticated: boolean
@@ -47,6 +49,11 @@ interface AppState {
   adminRole: AdminRole | undefined
   /** The signed-in admin's organisation (undefined for platform staff) */
   adminOrg: Organization | undefined
+  /** Marshal / official login: their email decides which tournaments they can open */
+  staffEmail: string | null
+  staffName: string
+  /** The signed-in console user as recorded on incidents and score changes */
+  consoleActor: Actor | undefined
   /** Does the signed-in admin have this permission (e.g. "tournaments.edit")? */
   can: (perm: string) => boolean
   toast: ToastData | null
@@ -59,6 +66,9 @@ interface AppState {
   closeDialog: () => void
   signIn: () => void
   signInAdmin: (userId: string) => void
+  signInStaff: (email: string, name: string) => void
+  /** One account, several roles: the golfer opens their marshal duty, and back */
+  switchRole: (to: 'golfer' | 'staff', tournamentId?: string) => void
   signOut: () => void
   startSetup: (b: AccountBasics) => void
   completeSetup: (a: NewAccount) => void
@@ -76,6 +86,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dialog, setDialog]         = useState<DialogData | null>(null)
   const [profileVersion, setPV]     = useState(0)
   const [adminUserId, setAdminUserId] = useState<string | null>(null)
+  const [staffEmail, setStaffEmail] = useState<string | null>(null)
+  const [staffName, setStaffName]   = useState('')
 
   // Re-derive permissions whenever roles or users change (e.g. an admin edits their own role)
   const accessVersion = useAccessVersion()
@@ -88,6 +100,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [adminUser?.id, adminUser?.roleId, adminUser?.active, adminOrg?.status, accessVersion],
   )
   const can = useCallback((perm: string) => perms.has(perm), [perms])
+  const consoleActor = useMemo<Actor | undefined>(
+    () => (adminUser ? { name: adminUser.name, role: adminOrg ? 'organiser' : 'admin' } : undefined),
+    [adminUser?.name, adminOrg?.id], // eslint-disable-line react-hooks/exhaustive-deps
+  )
 
   const showToast = useCallback((message: string, type: ToastData['type'] = 'success') => {
     setToast({ id: Date.now().toString(), message, type })
@@ -111,6 +127,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast(`Welcome, ${user?.name ?? 'admin'}`)
   }, [showToast])
 
+  const signInStaff = useCallback((email: string, name: string) => {
+    setStaffEmail(email)
+    setStaffName(name)
+    setRole('staff')
+    // Straight into the tournament that's on today, if there's exactly one
+    const live = assignmentsFor(email).filter(a => a.window === 'live')
+    navigate(live.length === 1 ? `/staff/${live[0].tournament.id}` : '/staff', { replace: true })
+    showToast(`Welcome, ${name}`)
+  }, [showToast])
+
+  const switchRole = useCallback((to: 'golfer' | 'staff', tournamentId?: string) => {
+    if (to === 'staff') {
+      setStaffEmail(MOCK_PROFILE.email)
+      setStaffName(`${MOCK_PROFILE.firstName} ${MOCK_PROFILE.lastName}`)
+      setRole('staff')
+      navigate(tournamentId ? `/staff/${tournamentId}` : '/staff')
+    } else {
+      setRole('golfer')
+      setStaffEmail(null)
+      navigate('/home')
+    }
+  }, [])
+
   const signOut = useCallback(() => {
     setDialog({
       title: 'Sign out',
@@ -121,6 +160,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       onConfirm: () => {
         setRole(null)
         setAdminUserId(null)
+        setStaffEmail(null)
         navigate('/signin', { replace: true })
         showToast('Signed out successfully', 'info')
       },
@@ -151,12 +191,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [showToast])
 
   const value = useMemo<AppState>(() => ({
-    isAuthenticated, role, basics, adminUser, adminRole, adminOrg, can, toast, dialog, profileVersion,
+    isAuthenticated, role, basics, adminUser, adminRole, adminOrg, staffEmail, staffName, consoleActor, can, toast, dialog, profileVersion,
     showToast, dismissToast, showDialog, closeDialog,
-    signIn, signInAdmin, signOut, startSetup, completeSetup, completeOrganizerSetup, touchProfile,
-  }), [isAuthenticated, role, basics, adminUser, adminRole, adminOrg, can, toast, dialog, profileVersion,
+    signIn, signInAdmin, signInStaff, switchRole, signOut, startSetup, completeSetup, completeOrganizerSetup, touchProfile,
+  }), [isAuthenticated, role, basics, adminUser, adminRole, adminOrg, staffEmail, staffName, consoleActor, can, toast, dialog, profileVersion,
        showToast, dismissToast, showDialog, closeDialog,
-       signIn, signInAdmin, signOut, startSetup, completeSetup, completeOrganizerSetup, touchProfile])
+       signIn, signInAdmin, signInStaff, switchRole, signOut, startSetup, completeSetup, completeOrganizerSetup, touchProfile])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

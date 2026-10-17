@@ -153,10 +153,10 @@ export function AdminTournaments() {
                       <td className="py-3.5 px-3"><StatusSelect t={t} /></td>
                       <td className="py-3.5 pl-3 pr-6">
                         <div className="flex justify-end gap-1.5">
-                          {['registration-closed', 'upcoming', 'in-progress', 'completed'].includes(t.status) && (
-                            <a href={`#/admin/tournaments/${t.id}/live`} aria-label={`Tournament day for ${t.name}`}
+                          {['published', 'registration-open', 'registration-closed', 'upcoming', 'in-progress', 'completed'].includes(t.status) && (
+                            <a href={`#/admin/tournaments/${t.id}/live`} aria-label={`${t.status === 'in-progress' ? 'Live' : t.status === 'completed' ? 'Results' : t.status === 'registration-closed' || t.status === 'upcoming' ? 'Tee sheet' : 'Registrations'} — ${t.name}`}
                               className={`h-9 px-3.5 rounded-full text-[12px] font-bold font-display flex items-center ${t.status === 'in-progress' ? 'bg-rose-500 text-white hover:bg-rose-600' : 'bg-canvas text-ink hover:bg-gray-200'}`}>
-                              {t.status === 'in-progress' ? 'Live' : t.status === 'completed' ? 'Results' : 'Tee sheet'}
+                              {t.status === 'in-progress' ? 'Live' : t.status === 'completed' ? 'Results' : t.status === 'registration-closed' || t.status === 'upcoming' ? 'Tee sheet' : 'Registrations'}
                             </a>
                           )}
                           {can('tournaments.edit') ? (
