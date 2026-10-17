@@ -27,9 +27,11 @@ import { TournamentWizard } from './admin/TournamentWizard'
 import { AdminTournamentLive } from './admin/LiveControl'
 import { AdminCourses } from './admin/ManageCourses'
 import { CourseWizard } from './admin/CourseWizard'
+import { StaffLayout, StaffHome, StaffEvent } from './staff/StaffConsole'
 
 const AUTH_ROUTES: Route['name'][] = ['signin', 'signup', 'setup', 'organizer-setup']
 const isAdminRoute = (r: Route) => r.name.startsWith('admin')
+const isStaffRoute = (r: Route) => r.name.startsWith('staff')
 
 function NotFound({ home }: { home: string }) {
   return (
@@ -49,7 +51,8 @@ function Routes() {
   useEffect(() => {
     // One sign-in page for golfers, organisers and admins; the account's role decides where it lands
     if (!role && !isAuthRoute) navigate('/signin', { replace: true })
-    else if (role === 'golfer' && (isAuthRoute || isAdminRoute(route))) navigate('/home', { replace: true })
+    else if (role === 'golfer' && (isAuthRoute || isAdminRoute(route) || isStaffRoute(route))) navigate('/home', { replace: true })
+    else if (role === 'staff' && !isStaffRoute(route)) navigate('/staff', { replace: true })
     else if (role === 'admin' && (isAuthRoute || !isAdminRoute(route))) navigate(adminHomePath(ALL_PERMISSIONS.filter(can)), { replace: true })
   }, [role, isAuthRoute, route, can])
 
@@ -83,7 +86,16 @@ function Routes() {
     return <AdminLayout route={route}>{page}</AdminLayout>
   }
 
-  if (isAuthRoute || isAdminRoute(route)) return null
+  if (role === 'staff') {
+    if (!isStaffRoute(route)) return null
+    return (
+      <StaffLayout route={route}>
+        {route.name === 'staff-event' ? <StaffEvent key={key} id={route.id} tab={route.tab} /> : <StaffHome key={key} />}
+      </StaffLayout>
+    )
+  }
+
+  if (isAuthRoute || isAdminRoute(route) || isStaffRoute(route)) return null
   const page = (() => {
     switch (route.name) {
       case 'home':         return <Home key={key} />

@@ -14,6 +14,9 @@ import { dist, generateHoleMap, playingHandicap, scoreLabel, strokesOnHole, toPa
 import { HoleMapView, greenDistances, hazardsAhead } from '../hole-map'
 import { BackLink } from './TournamentDetails'
 import { ScoreCell } from './Leaderboard'
+import { incidentsFor, logIncident, markedBy, markerCardFor, markerOf, mismatches, setMarkerStrokes, useOpsVersion } from '../ops'
+import { IncidentForm } from '../ops-ui'
+import { teeSetIdFor } from '../live'
 
 const HAZARD_LABEL = { bunker: 'Bunker', water: 'Water', trees: 'Trees' }
 
@@ -26,7 +29,9 @@ const HAZARD_LABEL = { bunker: 'Bunker', water: 'Water', trees: 'Trees' }
 export default function LivePlay({ id }: { id: string }) {
   useDataVersion()
   useLiveVersion()
+  useOpsVersion()
   const { showToast, showDialog } = useApp()
+  const [asking, setAsking] = useState(false)
   const t = getTournament(id)
   const course = t ? getCourse(t.courseId) : undefined
   const me = t ? myEntry(t.id) : undefined
@@ -54,7 +59,7 @@ export default function LivePlay({ id }: { id: string }) {
   const hole = holes[index]
   const map = hole.map ?? generateHoleMap(hole)
   const division = t.divisions?.find(d => d.id === me.divisionId)
-  const tee = course.teeSets?.find(ts => ts.id === division?.teeSetId)
+  const tee = course.teeSets?.find(ts => ts.id === teeSetIdFor(t, me))
   const coursePar = course.holeData.reduce((s, h) => s + h.par, 0)
   const playing = playingHandicap(me.handicapIndex, tee, coursePar, t.scoring?.allowancePct ?? 100, me.gender)
   const received = strokesOnHole(playing, hole.handicap, holes.length)
@@ -68,7 +73,13 @@ export default function LivePlay({ id }: { id: string }) {
   const row = leaderboard(t, round).find(r => r.entry.id === me.id)
   const group = groupOf(t.id, round, me.id)
   const partners = group ? entriesFor(t.id).filter(e => group.entryIds.includes(e.id) && !e.isMe) : []
-  const allIn = card.every(s => s !== null)
+  const blanks = card.filter(s => s === null).length
+  // Partners mark each other: I enter my partner's score too, and the two cards must agree
+  const marker = markerOf(t.id, round, me.id)
+  const markees = markedBy(t.id, round, me.id)
+  const myMarked = markerCardFor(t, me.id, round)
+  const disputedHoles = new Set(incidentsFor(t.id).filter(i => i.kind === 'score-dispute' && i.status !== 'resolved' && i.entryIds.includes(me.id)).map(i => i.hole))
+  const unsettled = mismatches(t, me.id, round).filter(i => !disputedHoles.has(holes[i].hole))
 
   function goTo(i: number) {
     setIndex(i)
@@ -101,10 +112,20 @@ export default function LivePlay({ id }: { id: string }) {
     showToast('Ball position from GPS (simulated in the prototype)', 'info')
   }
 
+  function sendToCommittee(i: number) {
+    logIncident({
+      tournamentId: t!.id, round, kind: 'score-dispute', hole: holes[i].hole, entryIds: [me!.id], status: 'committee',
+      note: `${me!.name} has ${card[i]} on hole ${holes[i].hole}; marker ${marker?.name ?? ''} recorded ${myMarked[i]}. We couldn’t agree.`,
+      raisedBy: { name: me!.name, role: 'golfer' },
+    })
+    showToast('Sent to the committee — keep playing, they’ll decide')
+  }
+
   function submitCard() {
+    // Golfers submit the card as entered and are responsible for it (client answer T-09)
     showDialog({
-      title: 'Submit your scorecard?',
-      message: `Gross ${row?.gross ?? '—'} (${toPar(row?.grossToPar ?? 0)}), net ${row?.net ?? '—'}. Your marker and the committee verify it next; you can't change scores after submitting.`,
+      title: blanks ? `Submit with ${blanks} blank hole${blanks > 1 ? 's' : ''}?` : 'Submit your scorecard?',
+      message: `${blanks ? 'Holes without a score stay blank on your card. ' : ''}Gross ${row?.gross ?? '—'} (${toPar(row?.grossToPar ?? 0)}), net ${row?.net ?? '—'}. You're responsible for the card as entered; the committee verifies it next and you can't change scores after submitting.`,
       confirmLabel: 'Submit card',
       onConfirm: () => { setCardState(t!.id, me!.id, round, 'submitted'); showToast('Scorecard submitted') },
     })
@@ -236,6 +257,59 @@ export default function LivePlay({ id }: { id: string }) {
             </Button>
           </section>
 
+          {unsettled.length > 0 && (
+            <section className="bg-rose-50 rounded-[28px] p-6">
+              <h2 className="font-display font-bold text-rose-800 text-[17px]">Your marker’s card doesn’t match</h2>
+              <p className="text-[13px] text-rose-700 mt-1">Settle it with {marker?.name.split(' ')[0] ?? 'your marker'} now. If you can’t agree, the committee decides.</p>
+              <ul className="mt-3 space-y-3">
+                {unsettled.map(i => (
+                  <li key={i} className="bg-white rounded-2xl p-3.5">
+                    <p className="text-[14px] text-ink"><span className="font-bold">Hole {holes[i].hole}:</span> you {card[i]} · {marker?.name.split(' ')[0] ?? 'marker'} {myMarked[i]}</p>
+                    <div className="flex flex-wrap gap-2 mt-2.5">
+                      <Button size="sm" onClick={() => { setStrokes(t, me.id, round, i, myMarked[i]); showToast(`Hole ${holes[i].hole} changed to ${myMarked[i]}`) }}>Use {myMarked[i]}</Button>
+                      <Button size="sm" variant="secondary" onClick={() => { setMarkerStrokes(t, me.id, round, i, card[i]); showToast(`${marker?.name.split(' ')[0] ?? 'Marker'} changed their record to ${card[i]}`) }}>Marker changes to {card[i]}</Button>
+                      <Button size="sm" variant="ghost" onClick={() => sendToCommittee(i)}>Send to committee</Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {markees.length > 0 && (
+            <section className="bg-white rounded-[28px] shadow-card p-6">
+              <h2 className="font-display font-bold text-ink text-[17px]">You’re marking</h2>
+              <p className="text-[12px] text-gray-500 mt-0.5">Enter your partner’s score for hole {hole.hole}. {marker ? `${marker.name} marks yours.` : ''}</p>
+              <ul className="mt-3 space-y-3">
+                {markees.map(p => {
+                  const theirs = cardFor(t, p.id, round)[index]
+                  const mine = markerCardFor(t, p.id, round)[index]
+                  const value = mine ?? hole.par
+                  return (
+                    <li key={p.id} className="flex items-center gap-3">
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-[14px] font-semibold text-ink truncate">{p.name}</span>
+                        <span className={`block text-[12px] ${mine !== null && theirs !== null && mine !== theirs ? 'text-rose-600 font-semibold' : 'text-gray-500'}`}>
+                          {mine === null ? 'Not entered yet' : theirs === null ? 'Waiting for their score' : mine === theirs ? 'Matches their card ✓' : `They entered ${theirs} — check with them`}
+                        </span>
+                      </span>
+                      <button disabled={locked || value <= 1} onClick={() => setMarkerStrokes(t, p.id, round, index, value - 1)} aria-label={`One fewer for ${p.name}`}
+                        className="w-10 h-10 rounded-full bg-canvas text-ink text-[20px] font-bold disabled:opacity-40">−</button>
+                      <span className={`w-8 text-center font-display font-extrabold text-[22px] ${mine === null ? 'text-gray-300' : 'text-ink'}`}>{value}</span>
+                      <button disabled={locked || value >= 15} onClick={() => setMarkerStrokes(t, p.id, round, index, mine === null ? value : value + 1)} aria-label={`${mine === null ? 'Confirm' : 'One more for'} ${p.name}`}
+                        className="w-10 h-10 rounded-full bg-canvas text-ink text-[20px] font-bold disabled:opacity-40">{mine === null ? '✓' : '+'}</button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          )}
+
+          <section className="bg-white rounded-[28px] shadow-card p-5 flex items-center gap-4">
+            <span className="flex-1 text-[13px] text-gray-600 leading-relaxed"><span className="font-bold text-ink block text-[14px]">Need a ruling?</span>A marshal or the committee answers rules questions and disputes.</span>
+            <Button size="sm" variant="secondary" onClick={() => setAsking(true)}>Ask for a ruling</Button>
+          </section>
+
           {partners.length > 0 && (
             <section className="bg-white rounded-[28px] shadow-card p-6">
               <h2 className="font-display font-bold text-ink text-[17px] mb-3">Your group</h2>
@@ -262,7 +336,10 @@ export default function LivePlay({ id }: { id: string }) {
           <h2 className="font-display font-bold text-ink text-[18px]">My scorecard</h2>
           {locked
             ? <span className="text-[13px] font-semibold text-pine-600">{cardState(t.id, me.id, round) === 'verified' ? 'Verified by the committee' : 'Submitted — awaiting verification'}</span>
-            : <Button size="sm" onClick={submitCard} disabled={!allIn}>{allIn ? 'Submit card' : `Submit after hole ${holes[holes.length - 1].hole}`}</Button>}
+            : <span className="flex items-center gap-3">
+                {unsettled.length > 0 && <span className="text-[12px] text-rose-600 font-semibold">Settle hole {unsettled.map(i => holes[i].hole).join(', ')} with your marker first</span>}
+                <Button size="sm" onClick={submitCard} disabled={unsettled.length > 0}>{blanks ? `Submit card (${blanks} blank)` : 'Submit card'}</Button>
+              </span>}
         </div>
         <div className="overflow-x-auto">
           <div className="flex gap-1 min-w-max">
@@ -270,12 +347,17 @@ export default function LivePlay({ id }: { id: string }) {
               <button key={h.hole} onClick={() => goTo(i)} className={`flex flex-col items-center gap-1 w-9 rounded-xl py-1 ${i === index ? 'bg-canvas' : ''}`}>
                 <span className="text-[10px] font-bold text-gray-400">{h.hole}</span>
                 <span className="text-[10px] text-gray-400">P{h.par}</span>
-                <ScoreCell strokes={card[i]} par={h.par} />
+                <span className={unsettled.includes(i) ? 'rounded-lg ring-2 ring-rose-400' : ''}><ScoreCell strokes={card[i]} par={h.par} /></span>
+                <span className={`text-[10px] font-semibold ${unsettled.includes(i) ? 'text-rose-600' : 'text-gray-300'}`}>{myMarked[i] ?? '·'}</span>
               </button>
             ))}
           </div>
         </div>
       </section>
+      {asking && (
+        <IncidentForm t={t} round={round} actor={{ name: me.name, role: 'golfer' }} onClose={() => setAsking(false)}
+          preset={{ kind: 'rules', hole: hole.hole, entryIds: [me.id] }} />
+      )}
     </div>
   )
 }

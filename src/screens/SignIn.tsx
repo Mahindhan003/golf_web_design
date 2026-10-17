@@ -3,13 +3,23 @@ import { Button, Input, PasswordInput } from '../components'
 import { AuthLayout } from '../shell'
 import { useApp } from '../app-context'
 import { authenticate, authFailureMessage } from '../admin/access'
+import { authenticateStaff } from '../ops'
 
 type SignInState = 'idle' | 'loading' | 'error' | 'server-error' | 'account'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+/** Prototype only: one tap fills a demo login for each role */
+const DEMO_ROLES = [
+  { role: 'Golfer', email: 'alex.hartwell@golfclub.com', password: 'golfer' },
+  { role: 'Organiser', email: 'dana@augustapines.com', password: 'augusta' },
+  { role: 'Marshal', email: 'marshal@gmail.com', password: 'marshal' },
+  { role: 'Official', email: 'official@gmail.com', password: 'official' },
+  { role: 'Admin', email: 'admin@gmail.com', password: 'admin' },
+]
+
 export default function SignIn() {
-  const { signIn, signInAdmin, showToast } = useApp()
+  const { signIn, signInAdmin, signInStaff, showToast } = useApp()
   const [email, setEmail]           = useState('')
   const [password, setPassword]     = useState('')
   const [emailError, setEmailError] = useState('')
@@ -35,7 +45,7 @@ export default function SignIn() {
       if (password === 'serverdown') return setState('server-error')
       if (password === 'wrongpass') return setState('error')
       setState('idle')
-      // Platform admins and organisers → admin console; everyone else → golfer home
+      // Platform admins and organisers → admin console; marshals and officials → their tournament; everyone else → golfer home
       const admin = authenticate(email, password)
       if (admin.ok) return signInAdmin(admin.user.id)
       if (admin.reason === 'invalid') return setState('error')
@@ -44,6 +54,9 @@ export default function SignIn() {
         setAccountMsg(authFailureMessage(admin))
         return setState('account')
       }
+      const staff = authenticateStaff(email, password)
+      if (staff.ok) return signInStaff(staff.email, staff.name)
+      if (staff.reason === 'invalid') return setState('error')
       signIn()
     }, 1400)
   }
@@ -116,6 +129,18 @@ export default function SignIn() {
           {state === 'loading' ? 'Signing in…' : 'Sign in'}
         </Button>
       </form>
+
+      <div className="mt-6 rounded-2xl bg-white shadow-card px-4 py-3.5">
+        <p className="text-[12px] font-bold font-display text-gray-500">Try a role (demo)</p>
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {DEMO_ROLES.map(r => (
+            <button key={r.role} type="button" onClick={() => { setEmail(r.email); setPassword(r.password); setEmailError(''); setPwError('') }}
+              className={`h-8 px-3 rounded-full text-[12px] font-bold font-display ${email === r.email ? 'bg-ink text-white' : 'bg-canvas text-ink hover:bg-gray-200'}`}>
+              {r.role}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <p className="text-center text-sm text-gray-500 mt-7">
         Don't have an account?{' '}

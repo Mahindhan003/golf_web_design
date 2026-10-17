@@ -1,4 +1,5 @@
 import type { Course, Division, Tournament, TournamentStatus } from '../types'
+import { staffRoleOf } from '../ops'
 import { MOCK_COURSES } from '../data'
 import { GOLF_PHOTOS, newId, formatDateRange, deriveRegistrationStatus, venueFieldsFromCourse } from '../store'
 import {
@@ -53,7 +54,8 @@ export const PRIZE_CATEGORIES = [
 ]
 export const HOLE_PRIZES = ['Longest drive', 'Closest to the pin']
 
-export const OFFICIAL_ROLES = ['Co-organizer', 'Marshal', 'Starter', 'Rules official']
+/** Marshals and starters get the marshal console; tournament officials (the committee) get scorecards and disputes; co-organisers are contacts only */
+export const OFFICIAL_ROLES = ['Marshal', 'Tournament official', 'Starter', 'Co-organizer']
 
 export const LOCAL_RULE_TEMPLATES: Record<string, string> = {
   'Preferred lies': 'Preferred lies: a ball lying in a closely mown area of the general area may be lifted, cleaned and placed within one club-length, no nearer the hole.',
@@ -101,11 +103,12 @@ export function newDraft(contact: { name?: string; email?: string; phone?: strin
     scoring: { ...DEFAULT_SCORING, usage: 'handicap', lockDate: '', playoffHoles: [] },
     eligibility: { gender: 'open', membersOnly: false, officialHandicapRequired: false },
     divisions: [{ id: 'div-open', name: 'Open', minHandicap: -10, maxHandicap: 54, teeSetId: '', gender: 'any' }],
-    registration: { opensAt: '', closesAt: '', waitlist: true, withdrawBy: '', refundPolicy: '', method: 'self', allowWithdrawal: true },
+    registration: { opensAt: '', closesAt: '', waitlist: false, withdrawBy: '', refundPolicy: '', method: 'self', allowWithdrawal: true },
     fees: { type: 'per-player', currency: 'USD', amount: 0, perTeam: false, includes: ['Green fee'] },
     teeSheet: { ...DEFAULT_TEE_SHEET, intervalMinutes: 9, pairing: 'automatic', publishAt: '' },
     pace: { targetMinutes: 255, flagMinutes: 10 },
-    officials: [], prizes: [], localRules: '',
+    // Every tournament has a marshal slot; the organiser fills it if they want one (client, Oct 16)
+    officials: [{ name: '', role: 'Marshal', phone: '' }], prizes: [], localRules: '',
     scoreVerification: 'organizer', visibility: 'public',
   }
 }
@@ -304,6 +307,8 @@ export function validateSection(key: SectionKey, t: Tournament, ctx: Ctx): Error
       if (!(t.pace!.targetMinutes >= 120 && t.pace!.targetMinutes <= 420)) e.pace = 'Target round time: 2h to 7h'
       if (!(t.pace!.flagMinutes >= 1 && t.pace!.flagMinutes <= 60)) e.flag = '1–60 minutes'
       ;(t.officials ?? []).forEach((o, i) => {
+        const openSlot = !filled(o.name) && !filled(o.email) && staffRoleOf(o)
+        if (openSlot) return
         if (!filled(o.name) || !filled(o.role)) e[`official${i}`] = 'Name and role are required'
         else if (filled(o.email) && !EMAIL.test(o.email!.trim())) e[`official${i}`] = 'Enter a valid email'
       })
@@ -383,7 +388,8 @@ export function finalize(t: Tournament, status: TournamentStatus, registered: nu
     scoring: {
       ...t.scoring!,
       basis: t.scoring!.usage === 'scratch' ? 'gross' : t.scoring!.basis,
-      cutAfterRound: rounds.length > 1 ? t.scoring!.cutAfterRound : 0,
+      // No cuts in amateur / social tournaments (client answer T-12)
+      cutAfterRound: 0, cutSize: 0,
     },
     eligibility: { ...t.eligibility!, gender: 'open', maxHandicap: t.scoring!.maxHandicap },
     prizes: (t.prizes ?? []).map(p => ({ ...p, label: p.category === 'Custom' || !p.category ? p.label || 'Prize' : p.category })),

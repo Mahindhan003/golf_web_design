@@ -23,6 +23,36 @@ import {
   type SectionKey, type StepKey, type Errors,
 } from './tournament-setup'
 import { isSelectable } from './course-setup'
+import { INVITE_PASSWORD, slotStatus, staffRoleOf } from '../ops'
+import { SlotChip } from '../ops-ui'
+import { SCRAMBLE_ALLOWANCES } from '../golf'
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Scramble teams get a share of each player's course handicap, lowest handicap first (client answer T-07) */
+function ScrambleAllowances({ size }: { size: 2 | 3 | 4 }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <FieldLabel label="Team handicap allowance" required />
+      <div className="rounded-2xl bg-canvas overflow-hidden">
+        <table className="w-full text-left text-[13px]">
+          <thead><tr className="text-[11px] font-bold font-display text-gray-400">
+            <th className="px-4 py-2">Team</th><th className="px-2 py-2">Lowest</th><th className="px-2 py-2">2nd</th><th className="px-2 py-2">3rd</th><th className="px-2 py-2">Highest</th>
+          </tr></thead>
+          <tbody>
+            {([2, 3, 4] as const).map(n => (
+              <tr key={n} className={`border-t border-black/[0.05] ${n === size ? 'bg-lime-400/30 font-semibold' : ''}`}>
+                <td className="px-4 py-2 text-ink">{n}-player</td>
+                {[0, 1, 2, 3].map(k => <td key={k} className="px-2 py-2">{SCRAMBLE_ALLOWANCES[n][k] !== undefined ? `${SCRAMBLE_ALLOWANCES[n][k]}%` : '—'}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <FieldError hint="Applied to each player’s course handicap and added together for the team’s playing handicap." />
+    </div>
+  )
+}
 
 /*
  * Create / edit tournament as a 3-step wizard:
@@ -361,21 +391,7 @@ function Rounds({ t, set, e }: SectionProps) {
         ))}
       </div>
       {dates.length > 0 && <Callout>Tournament dates: <b>{formatDay(dates[0])}{dates.length > 1 ? ` – ${formatDay(dates[dates.length - 1])}` : ''}</b></Callout>}
-      {rounds.length > 1 && (
-        <FieldGroup title="Cut" hint="Only the leading players carry on to the later rounds">
-          <Toggle label="Apply a cut" checked={t.scoring!.cutAfterRound > 0}
-            onChange={on => set({ scoring: { ...t.scoring!, cutAfterRound: on ? 1 : 0, cutSize: on ? t.scoring!.cutSize || 60 : 0 } })} />
-          {t.scoring!.cutAfterRound > 0 && (
-            <div className="grid md:grid-cols-2 gap-4">
-              <SelectField label="After round *" value={String(t.scoring!.cutAfterRound)} error={e.cutAfterRound}
-                options={rounds.slice(0, -1).map((_, i) => ({ value: String(i + 1), label: `Round ${i + 1}` }))}
-                onChange={v => set({ scoring: { ...t.scoring!, cutAfterRound: Number(v) } })} />
-              <Input label="Top players (and ties) *" type="number" min={1} value={t.scoring!.cutSize || ''} error={e.cutSize}
-                onChange={x => set({ scoring: { ...t.scoring!, cutSize: Number(x.target.value) } })} />
-            </div>
-          )}
-        </FieldGroup>
-      )}
+      {rounds.length > 1 && <Callout>No cut: every player plays every round (amateur and social events don’t use cuts).</Callout>}
     </SectionCard>
   )
 }
@@ -456,6 +472,7 @@ function Scoring({ t, set, e }: SectionProps) {
               onChange={x => update({ maxHandicap: x.target.value === '' ? 54 : Number(x.target.value) })} error={e.maxHandicap}
               hint="Golfers above this can't enter. 54 = no limit." />
           </div>
+          {t.format === 'Scramble' ? <ScrambleAllowances size={t.team?.size ?? 4} /> : (
           <div className="flex flex-col gap-1.5">
             <FieldLabel label="Handicap allowance" required />
             <div className="flex items-center gap-4">
@@ -465,6 +482,7 @@ function Scoring({ t, set, e }: SectionProps) {
             </div>
             <FieldError error={e.allowancePct} hint={rec ? `Recommended ${rec}% for ${t.format}` : 'Set the team allowance for your scramble'} />
           </div>
+          )}
         </>
       )}
       <Segmented label="Results shown" required value={s.basis} onChange={v => update({ basis: v })}
@@ -530,11 +548,10 @@ function Registration({ t, set, e, registered }: SectionProps) {
         options={[{ value: 'self', label: 'Golfers register themselves' }, { value: 'organizer', label: 'I add players' }, { value: 'both', label: 'Both' }]} />
       <FieldGroup title="Entry">
         <div className="space-y-4">
-          <Toggle label="Waiting list when full" hint="Golfers can join a waiting list and get a spot if someone withdraws" checked={r.waitlist} onChange={v => update({ waitlist: v })} />
           <Toggle label="Official handicap required" checked={t.eligibility!.officialHandicapRequired} onChange={v => set({ eligibility: { ...t.eligibility!, officialHandicapRequired: v } })} />
           <Toggle label="Club members only" checked={t.eligibility!.membersOnly} onChange={v => set({ eligibility: { ...t.eligibility!, membersOnly: v } })} />
         </div>
-        <p className="text-[12px] text-gray-500">Age, gender and handicap limits are set through divisions.</p>
+        <p className="text-[12px] text-gray-500">Age, gender and handicap limits are set through divisions. There’s no waiting list: when the field is full, registration closes and you manage changes on the Tournament day page.</p>
       </FieldGroup>
       <FieldGroup title="Withdrawal">
         <Toggle label="Allow withdrawal" checked={!!r.allowWithdrawal} onChange={v => update({ allowWithdrawal: v, withdrawBy: v ? r.withdrawBy : '' })} />
@@ -645,6 +662,7 @@ function TeeSheet({ t, set, e }: SectionProps) {
 }
 
 function Rules({ t, set, e }: SectionProps) {
+  const { showToast } = useApp()
   const officials = t.officials ?? []
   const updateOfficial = (i: number, patch: Partial<Official>) => set({ officials: officials.map((o, j) => (j === i ? { ...o, ...patch } : o)) })
   const pace = t.pace!
@@ -675,24 +693,53 @@ function Rules({ t, set, e }: SectionProps) {
           <Stepper label="Flag a group when behind by" required suffix="min" value={pace.flagMinutes} min={1} max={60} onChange={v => set({ pace: { ...pace, flagMinutes: v } })} error={e.flag} />
         </div>
       </SectionCard>
-      <SectionCard title="Officials & team" subtitle="Each person gets their own login, so every change is tracked"
+      <SectionCard title="Marshals, officials & team" subtitle="Marshals and tournament officials get a login for this tournament only. It stops working when the tournament closes."
         aside={<AddRowButton label="Add person" onClick={() => set({ officials: [...officials, { name: '', role: 'Marshal', phone: '', email: '' }] })} />}>
-        {officials.length === 0 ? <p className="text-[13px] text-gray-500">No officials yet. Add co-organisers, marshals and starters.</p> : (
+        <div className="grid md:grid-cols-3 gap-2 mb-1">
+          {[
+            ['Marshal / starter', 'Pace of play, tee sheet, cart and rules issues on the course. Can’t change scores.'],
+            ['Tournament official', 'The committee: checks scorecards, settles disputes, corrects scores with a reason.'],
+            ['Co-organizer', 'Contact only. Give co-organisers console access from Team.'],
+          ].map(([title, body]) => (
+            <div key={title} className="bg-canvas rounded-2xl px-4 py-3">
+              <p className="text-[13px] font-bold font-display text-ink">{title}</p>
+              <p className="text-[12px] text-gray-500 leading-relaxed mt-0.5">{body}</p>
+            </div>
+          ))}
+        </div>
+        {officials.length === 0 ? <p className="text-[13px] text-gray-500">No one yet. Add a marshal slot even if you fill it later.</p> : (
           <div className="space-y-3">
-            {officials.map((o, i) => (
-              <div key={i}>
-                <div className="flex gap-3 items-start">
-                  <div className="flex-1 grid md:grid-cols-4 gap-3">
-                    <Input label="Name *" value={o.name} onChange={x => updateOfficial(i, { name: x.target.value })} />
-                    <SelectField label="Role *" value={o.role} options={OFFICIAL_ROLES} onChange={v => updateOfficial(i, { role: v })} />
-                    <Input label="Email" type="email" value={o.email ?? ''} onChange={x => updateOfficial(i, { email: x.target.value })} />
-                    <Input label="Phone" type="tel" value={o.phone} onChange={x => updateOfficial(i, { phone: x.target.value })} />
+            {officials.map((o, i) => {
+              const access = staffRoleOf(o)
+              const status = access ? slotStatus(t, o) : null
+              const canInvite = access && o.name.trim() && EMAIL_RE.test(o.email?.trim() ?? '')
+              return (
+                <div key={i} className="rounded-2xl ring-1 ring-black/[0.06] p-3">
+                  <div className="flex gap-3 items-start">
+                    <div className="flex-1 grid md:grid-cols-4 gap-3">
+                      <Input label={access ? 'Name' : 'Name *'} placeholder={access ? 'Open slot' : ''} value={o.name} onChange={x => updateOfficial(i, { name: x.target.value })} />
+                      <SelectField label="Role *" value={o.role} options={OFFICIAL_ROLES.includes(o.role) ? OFFICIAL_ROLES : [...OFFICIAL_ROLES, o.role]} onChange={v => updateOfficial(i, { role: v })} />
+                      <Input label={access ? 'Email (their login)' : 'Email'} type="email" value={o.email ?? ''} onChange={x => updateOfficial(i, { email: x.target.value, invitedAt: undefined })} />
+                      <Input label="Phone" type="tel" value={o.phone} onChange={x => updateOfficial(i, { phone: x.target.value })} />
+                    </div>
+                    <RemoveRowButton label={`Remove ${o.name || 'person'}`} onClick={() => set({ officials: officials.filter((_, j) => j !== i) })} />
                   </div>
-                  <RemoveRowButton label={`Remove ${o.name || 'person'}`} onClick={() => set({ officials: officials.filter((_, j) => j !== i) })} />
+                  {status && (
+                    <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                      <SlotChip status={status} invited={!!o.invitedAt} />
+                      {canInvite && status !== 'ended' && (
+                        <button type="button" onClick={() => { updateOfficial(i, { invitedAt: new Date().toISOString() }); showToast(`Login sent to ${o.email} (demo password: ${INVITE_PASSWORD})`) }}
+                          className="h-8 px-3.5 rounded-full bg-canvas text-[12px] font-bold font-display text-ink hover:bg-gray-200">
+                          {o.invitedAt ? 'Resend login' : 'Send login'}
+                        </button>
+                      )}
+                      <span className="text-[12px] text-gray-500">{access === 'marshal' ? 'Marshal console' : 'Official console'}{status === 'open' ? ' · add a name and email to give them a login' : ''}</span>
+                    </div>
+                  )}
+                  <FieldError error={e[`official${i}`]} />
                 </div>
-                <FieldError error={e[`official${i}`]} />
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </SectionCard>
@@ -796,7 +843,6 @@ function Review({ t, errors, warnings, onEdit, action }: { t: Tournament; errors
     ] },
     { title: 'Rounds, course & divisions', edit: 'rounds', rows: [
       ['Course', course?.name], ['Rounds', rounds.map(r => `${formatDay(r.date)} (${r.holes === 'all' ? course?.holes ?? 18 : r.holes === 'front' ? 'front 9' : 'back 9'})`).join(' · ')],
-      ['Cut', t.scoring!.cutAfterRound ? `After round ${t.scoring!.cutAfterRound}, top ${t.scoring!.cutSize} and ties` : 'No cut'],
       ['Divisions', t.divisions!.map(d => `${d.name || '—'} (${tee(d.teeSetId) ?? 'no tees'})`).join(' · ')],
     ] },
     { title: 'Handicap, scoring & tie-breaks', edit: 'scoring', rows: [
@@ -807,7 +853,7 @@ function Review({ t, errors, warnings, onEdit, action }: { t: Tournament; errors
     ] },
     { title: 'Registration & fees', edit: 'registration', rows: [
       ['Opens', dt(t.registration!.opensAt)], ['Closes', dt(t.registration!.closesAt)],
-      ['Field', `${t.registration!.minPlayers ? `${t.registration!.minPlayers}–` : 'up to '}${t.maxPlayers || '—'} ${isTeam(t) ? 'teams' : 'players'}${t.registration!.waitlist ? ' · waiting list' : ''}`],
+      ['Field', `${t.registration!.minPlayers ? `${t.registration!.minPlayers}–` : 'up to '}${t.maxPlayers || '—'} ${isTeam(t) ? 'teams' : 'players'}`],
       ['Fee', fee], ['Free withdrawal until', t.registration!.allowWithdrawal ? dt(t.registration!.withdrawBy) : 'Withdrawal not allowed'],
     ] },
     { title: 'Tee sheet & officials', edit: 'teesheet', rows: [

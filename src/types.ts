@@ -211,7 +211,10 @@ export interface Official {
   name: string
   role: string
   phone: string
+  /** Marshals and officials with an email get a login for this tournament only (see ops.ts) */
   email?: string
+  /** When the organiser sent the login invitation */
+  invitedAt?: string
 }
 
 export interface HoleData {

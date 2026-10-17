@@ -5,6 +5,7 @@ import { Wordmark } from '../shell'
 import { Button, IconSignOut } from '../components'
 import { resetDemoData } from '../store'
 import { resetLiveData } from '../live'
+import { resetOpsData } from '../ops'
 import { resetAccessData, verifyOrganizationEmail, type OrgStatus } from './access'
 import { navigate } from '../router'
 
@@ -148,7 +149,7 @@ function useResetDemo() {
     message: 'This restores the original tournaments, courses, organisers, roles and admin users, and removes every change made in the admin console on this device.',
     confirmLabel: 'Reset data',
     destructive: true,
-    onConfirm: () => { resetDemoData(); resetAccessData(); resetLiveData(); showToast('Demo data restored', 'info') },
+    onConfirm: () => { resetDemoData(); resetAccessData(); resetLiveData(); resetOpsData(); showToast('Demo data restored', 'info') },
   })
 }
 

@@ -14,7 +14,8 @@ import { withCourseDefaults, withTournamentDefaults } from './golf'
  */
 
 // v3: full course/tournament set-up (tee sets, hole maps, rounds, scoring, fees, tee sheet…)
-const STORAGE_KEY = 'gtp-admin-data-v3'
+// v4: role-based screens (organiser t1/t8, marshal and official slots) need the new seed
+const STORAGE_KEY = 'gtp-admin-data-v4'
 
 // Pristine copies for "Reset demo data"
 const DEFAULT_TOURNAMENTS: Tournament[] = structuredClone(MOCK_TOURNAMENTS)
@@ -45,6 +46,7 @@ function persist() {
   try {
     localStorage.removeItem('gtp-admin-data-v1') // older formats
     localStorage.removeItem('gtp-admin-data-v2')
+    localStorage.removeItem('gtp-admin-data-v3')
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return
     const saved = JSON.parse(raw) as { tournaments?: Tournament[]; courses?: Course[] }
